@@ -15,9 +15,9 @@
  */
 package party.balloonboat.commands;
 
-import com.jagrosh.jdautilities.commandclient.Command;
 import com.jagrosh.jdautilities.commandclient.CommandEvent;
 import net.dv8tion.jda.core.entities.ChannelType;
+import party.balloonboat.data.Database;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
@@ -26,12 +26,13 @@ import javax.script.ScriptException;
 /**
  * @author Kaidan Gustave
  */
-public class EvalCommand extends Command
+public class EvalCommand extends DatabaseCommand
 {
     private final ScriptEngine engine;
 
-    public EvalCommand()
+    public EvalCommand(Database database)
     {
+        super(database);
         this.name = "eval";
         this.aliases = new String[]{"evaluate"};
         this.arguments = "<script>";
@@ -49,6 +50,7 @@ public class EvalCommand extends Command
         engine.put("channel", event.getChannel());
         engine.put("author", event.getAuthor());
         engine.put("selfUser", event.getSelfUser());
+        engine.put("database", database);
 
         if(event.isFromType(ChannelType.TEXT))
         {

@@ -30,20 +30,20 @@ import java.util.function.Consumer;
 @SuppressWarnings("unused")
 public class Database
 {
-    public static final SimpleLog LOG = SimpleLog.getLog("SQL");
+    public static final SimpleLog LOG = SimpleLog.getLog("Database");
 
     private final Connection connection;
     private final RatingsTable ratings;
     private final GuildSettingsTable guildSettings;
     private final PrivateSettingsTable privateSettings;
 
-    public Database(String user, String pass, String url)
-            // TODO Simplify this so that it only throws critical errors
+    public Database(String url, String user, String pass)
             throws SQLException, ClassNotFoundException, IllegalAccessException, InstantiationException
     {
+
         Class.forName("org.h2.Driver").newInstance();
 
-        connection = DriverManager.getConnection(user, pass, url);
+        connection = DriverManager.getConnection(url, user, pass);
 
         ratings = new RatingsTable(connection);
         guildSettings = new GuildSettingsTable(connection);
@@ -155,10 +155,25 @@ public class Database
         }
     }
 
+    public long getPing()
+    {
+        long start = System.currentTimeMillis();
+
+        try {
+            connection.getMetaData();
+        } catch(SQLException e) {
+            LOG.warn(e);
+        }
+
+        return System.currentTimeMillis() - start;
+    }
+
     public void shutdown()
     {
+        LOG.info("Attempting to close JDBC connection...");
         try {
             connection.close();
+            LOG.info("JDBC connection has been closed!");
         } catch(SQLException e) {
             LOG.warn(e);
         }
@@ -168,29 +183,29 @@ public class Database
     public enum Table
     {
         RATINGS(
-                "LONG USER_ID",
-                "LONG TARGET_ID",
-                "SHORT RATING"
+                "USER_ID LONG",
+                "TARGET_ID LONG",
+                "RATING SMALLINT"
         ),
 
         CALCULATED(
-                "LONG USER_ID",
-                "DOUBLE TRUE_RATING",
-                "SHORT EFFECTIVE_RATING"
+                "USER_ID LONG",
+                "TRUE_RATING DOUBLE",
+                "EFFECTIVE_RATING SMALLINT"
         ),
 
         PRIVATE_SETTINGS(
-                "LONG USER_ID",
-                "BOOLEAN DM_CHANGES"
+                "USER_ID LONG",
+                "DM_CHANGES BOOLEAN"
         ),
 
         GUILD_SETTINGS(
-                "LONG GUILD_ID",
-                "LONG ROLE_1",
-                "LONG ROLE_2",
-                "LONG ROLE_3",
-                "LONG ROLE_4",
-                "LONG ROLE_5"
+                "GUILD_ID LONG",
+                "ROLE_1 LONG",
+                "ROLE_2 LONG",
+                "ROLE_3 LONG",
+                "ROLE_4 LONG",
+                "ROLE_5 LONG"
         );
 
         private final String[] typeAndColumn;
