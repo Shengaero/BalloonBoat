@@ -50,7 +50,7 @@ public abstract class TableHandler
 
     @SuppressWarnings("unused")
     // This is really only necessary if for some reason we'd need to create an individual table
-    public void create() throws SQLException
+    public final void create() throws SQLException
     {
         table.createUsing(connection);
     }

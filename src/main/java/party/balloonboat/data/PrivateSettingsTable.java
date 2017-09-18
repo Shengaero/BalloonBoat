@@ -15,12 +15,16 @@
  */
 package party.balloonboat.data;
 
+import net.dv8tion.jda.core.entities.User;
+
 import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 
 /**
  * @author Kaidan Gustave
  */
-@SuppressWarnings("unused")
 public class PrivateSettingsTable extends TableHandler
 {
     /*
@@ -33,8 +37,48 @@ public class PrivateSettingsTable extends TableHandler
         super(connection, Database.Table.PRIVATE_SETTINGS);
     }
 
-    @Override
-    public void create() {
+    public boolean hasRow(User user) throws SQLException
+    {
+        boolean returns;
+        try (Statement statement = connection.createStatement())
+        {
+            try (ResultSet results = statement.executeQuery("SELECT * FROM "+table.name()+" WHERE USER_ID = "+user.getIdLong()))
+            {
+                // if there is a row then it will be true, if not it will be false
+                returns = results.next();
+            }
+        }
+        return returns;
+    }
 
+    public boolean isUsingDMChanges(User user) throws SQLException
+    {
+        Boolean isUsing = select("DM_CHANGES", "USER_ID = "+user.getIdLong());
+
+        return isUsing == null ? false : isUsing;
+    }
+
+    public void setUsingDMChanges(User user, boolean isUsing) throws SQLException
+    {
+        if(hasRow(user))
+            update(user.getIdLong(), isUsing);
+        else
+            add(user.getIdLong(), isUsing);
+    }
+
+    private void add(long userId, boolean isUsing) throws SQLException
+    {
+        try (Statement statement = connection.createStatement())
+        {
+            statement.execute("INSERT INTO "+table.name()+" (USER_ID, DM_CHANGES) VALUES ("+userId+","+isUsing+")");
+        }
+    }
+
+    private void update(long userId, boolean isUsing) throws SQLException
+    {
+        try (Statement statement = connection.createStatement())
+        {
+            statement.execute("UPDATE "+table.name()+" SET DM_CHANGES = "+isUsing+" WHERE USER_ID = "+userId);
+        }
     }
 }

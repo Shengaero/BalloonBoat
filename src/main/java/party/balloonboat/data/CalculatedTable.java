@@ -35,8 +35,4 @@ public class CalculatedTable extends TableHandler
         super(connection, Database.Table.CALCULATED);
     }
 
-    @Override
-    public void create() {
-
-    }
 }

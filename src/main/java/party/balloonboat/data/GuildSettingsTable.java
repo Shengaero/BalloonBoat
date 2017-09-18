@@ -26,7 +26,6 @@ import java.sql.Statement;
 /**
  * @author Kaidan Gustave
  */
-@SuppressWarnings("unused")
 public class GuildSettingsTable extends TableHandler
 {
     /*
@@ -109,11 +108,5 @@ public class GuildSettingsTable extends TableHandler
             // Concat and execute SQL String with values.
             statement.execute("INSERT INTO "+table.name()+" (GUILD_ID, ROLE_1, ROLE_2, ROLE_3, ROLE_4, ROLE_5) VALUES "+values);
         }
-    }
-
-    @Override
-    public void create()
-    {
-
     }
 }

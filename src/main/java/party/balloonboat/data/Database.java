@@ -35,6 +35,7 @@ public class Database
     private final Connection connection;
     private final RatingsTable ratings;
     private final GuildSettingsTable guildSettings;
+    private final PrivateSettingsTable privateSettings;
 
     public Database(String user, String pass, String url)
             // TODO Simplify this so that it only throws critical errors
@@ -46,6 +47,7 @@ public class Database
 
         ratings = new RatingsTable(connection);
         guildSettings = new GuildSettingsTable(connection);
+        privateSettings = new PrivateSettingsTable(connection);
     }
 
     public boolean init()
@@ -108,6 +110,25 @@ public class Database
     {
         try {
             guildSettings.setRole(role, number);
+        } catch(SQLException e) {
+            LOG.warn(e);
+        }
+    }
+
+    public boolean isUsingDMChanges(User user, boolean isUsing)
+    {
+        try {
+            return privateSettings.isUsingDMChanges(user);
+        } catch(SQLException e) {
+            LOG.warn(e);
+            return false; // Default to false
+        }
+    }
+
+    public void setUsingDMChanges(User user, boolean isUsing)
+    {
+        try {
+            privateSettings.setUsingDMChanges(user, isUsing);
         } catch(SQLException e) {
             LOG.warn(e);
         }
