@@ -50,7 +50,6 @@ abstract class Table
 
     public abstract void create();
 
-
     private static String mergeToString(String... params)
     {
         StringBuilder builder = new StringBuilder("WHERE ");
