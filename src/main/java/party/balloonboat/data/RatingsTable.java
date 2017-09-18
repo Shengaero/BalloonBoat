@@ -25,7 +25,7 @@ import java.sql.Statement;
 /**
  * @author Kaidan Gustave
  */
-public class RatingsTable extends Table
+public class RatingsTable extends TableHandler
 {
     /*
      * RATINGS
@@ -34,30 +34,24 @@ public class RatingsTable extends Table
      * col short RATING
      */
 
-    RatingsTable(Connection connection)
+    public RatingsTable(Connection connection)
     {
-        super(connection, "RATINGS");
+        super(connection, Database.Table.RATINGS);
     }
 
-    public boolean hasRating(User user, User target) throws SQLException
+    public boolean hasRow(User user, User target) throws SQLException
     {
         boolean returns;
-        try (Statement statement = connection.createStatement()) {
+        try (Statement statement = connection.createStatement())
+        {
             try (ResultSet results = statement.executeQuery(
-                    "SELECT * FROM "+name+" WHERE USER_ID = "+user.getId()+" AND TARGET_ID = "+target.getId())) {
-                // Set returns
+                    "SELECT * FROM "+table.name()+" WHERE USER_ID = "+user.getIdLong()+" AND TARGET_ID = "+target.getIdLong()))
+            {
+                // if there is a row then it will be true, if not it will be false
                 returns = results.next();
             }
         }
         return returns;
-    }
-
-    public void setRating(User user, User target, short rating) throws SQLException
-    {
-        if(hasRating(user,target))
-            update(user.getIdLong(), target.getIdLong(), rating);
-        else
-            add(user.getIdLong(), target.getIdLong(), rating);
     }
 
     public short getRating(User user, User target) throws SQLException
@@ -67,11 +61,20 @@ public class RatingsTable extends Table
         return rating == null ? -1 : rating; // returns -1 if there is no rating
     }
 
+    public void setRating(User user, User target, short rating) throws SQLException
+    {
+        // If the pair of users have a row already we want to update it not create a new one
+        if(hasRow(user,target))
+            update(user.getIdLong(), target.getIdLong(), rating);
+        else
+            add(user.getIdLong(), target.getIdLong(), rating);
+    }
+
     private void update(long user, long target, short rating) throws SQLException
     {
         try (Statement statement = connection.createStatement())
         {
-            statement.execute("UPDATE "+name+" SET RATING = "+rating+" WHERE USER_ID = "+user+" TARGET_ID = "+target);
+            statement.execute("UPDATE "+table.name()+" SET RATING = "+rating+" WHERE USER_ID = "+user+" TARGET_ID = "+target);
         }
     }
 
@@ -79,16 +82,7 @@ public class RatingsTable extends Table
     {
         try (Statement statement = connection.createStatement())
         {
-            statement.execute("INSERT INTO "+name+" (USER_ID, TARGET_ID, RATING) VALUES ("+user+","+target+","+rating+")");
-        }
-    }
-
-    @Override
-    public void create() {
-        try (Statement statement = connection.createStatement()) {
-            statement.execute("CREATE TABLE "+name+"(LONG USER_ID, LONG TARGET_ID, SHORT RATING)");
-        } catch(SQLException e) {
-            Database.LOG.warn(e);
+            statement.execute("INSERT INTO "+table.name()+" (USER_ID, TARGET_ID, RATING) VALUES ("+user+","+target+","+rating+")");
         }
     }
 }

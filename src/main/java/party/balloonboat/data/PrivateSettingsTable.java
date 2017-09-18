@@ -20,7 +20,8 @@ import java.sql.Connection;
 /**
  * @author Kaidan Gustave
  */
-public class SettingsTable extends Table
+@SuppressWarnings("unused")
+public class PrivateSettingsTable extends TableHandler
 {
     /*
      * SETTINGS
@@ -28,8 +29,8 @@ public class SettingsTable extends Table
      * col boolean DM_CHANGES
      */
 
-    SettingsTable(Connection connection, String name) {
-        super(connection, name);
+    public PrivateSettingsTable(Connection connection) {
+        super(connection, Database.Table.PRIVATE_SETTINGS);
     }
 
     @Override

@@ -20,7 +20,8 @@ import java.sql.Connection;
 /**
  * @author Kaidan Gustave
  */
-public class CalculatedTable extends Table
+@SuppressWarnings("unused")
+public class CalculatedTable extends TableHandler
 {
     /*
      * CALCULATIONS
@@ -29,9 +30,9 @@ public class CalculatedTable extends Table
      * col short EFFECTIVE_RATING
      */
 
-    CalculatedTable(Connection connection)
+    public CalculatedTable(Connection connection)
     {
-        super(connection, "CALCULATED");
+        super(connection, Database.Table.CALCULATED);
     }
 
     @Override

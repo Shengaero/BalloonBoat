@@ -15,12 +15,19 @@
  */
 package party.balloonboat.data;
 
+import net.dv8tion.jda.core.entities.Guild;
+import net.dv8tion.jda.core.entities.Role;
+
 import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 
 /**
  * @author Kaidan Gustave
  */
-public class GuildSettingsTable extends Table
+@SuppressWarnings("unused")
+public class GuildSettingsTable extends TableHandler
 {
     /*
      * GUILD_SETTINGS
@@ -32,12 +39,81 @@ public class GuildSettingsTable extends Table
      * col long ROLE_5
      */
 
-    GuildSettingsTable(Connection connection, String name) {
-        super(connection, name);
+    public GuildSettingsTable(Connection connection)
+    {
+        super(connection, Database.Table.GUILD_SETTINGS);
+    }
+
+    public boolean hasRow(Guild guild) throws SQLException
+    {
+        boolean returns;
+        try (Statement statement = connection.createStatement())
+        {
+            try (ResultSet results = statement.executeQuery("SELECT * FROM "+table.name()+" WHERE GUILD_ID = "+guild.getIdLong()))
+            {
+                // if there is a row then it will be true, if not it will be false
+                returns = results.next();
+            }
+        }
+        return returns;
+    }
+
+    public long getRoleId(Guild guild, short number) throws SQLException
+    {
+        Long l = select("ROLE_"+number, "GUILD_ID = "+guild.getIdLong());
+
+        // returns -1 if the query provided null OR if the query pointed to an unset
+        // role ID (unset role IDs are saved as 0L)
+        return l == null || l == 0L ? -1L : l;
+    }
+
+    public void setRole(Role role, short number) throws SQLException
+    {
+        // If the guild already has a row already we want to update it not create a new one
+        if(hasRow(role.getGuild()))
+            update(role.getGuild().getIdLong(), role.getIdLong(), number);
+        else
+            add(role.getGuild().getIdLong(), role.getIdLong(), number);
+    }
+
+    private void update(long guildId, long roleId, short number) throws SQLException
+    {
+        try (Statement statement = connection.createStatement())
+        {
+            statement.execute("UPDATE "+table.name()+" SET ROLE_"+number+" = "+roleId+" WHERE GUILD_ID = "+guildId);
+        }
+    }
+
+    private void add(long guildId, long roleId, short number) throws SQLException
+    {
+        try (Statement statement = connection.createStatement())
+        {
+            StringBuilder valueB = new StringBuilder("(").append(guildId).append(", ");
+
+            for(int i = 1; i <= 5; i++)
+            {
+                // Unset role ID's are saved as 0L
+                if(number != i)
+                    valueB.append(0L);
+                else
+                    valueB.append(roleId);
+
+                // Last parameter is doesn't require a comma after it
+                if(i < 5)
+                    valueB.append(", ");
+            }
+            valueB.append(")");
+
+            String values = valueB.toString();
+
+            // Concat and execute SQL String with values.
+            statement.execute("INSERT INTO "+table.name()+" (GUILD_ID, ROLE_1, ROLE_2, ROLE_3, ROLE_4, ROLE_5) VALUES "+values);
+        }
     }
 
     @Override
-    public void create() {
+    public void create()
+    {
 
     }
 }

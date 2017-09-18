@@ -21,15 +21,15 @@ import java.sql.*;
 /**
  * @author Kaidan Gustave
  */
-abstract class Table
+public abstract class TableHandler
 {
     protected final Connection connection;
-    protected final String name;
+    protected final Database.Table table;
 
-    Table(Connection connection, String name)
+    public TableHandler(Connection connection, Database.Table table)
     {
         this.connection = connection;
-        this.name = name;
+        this.table = table;
     }
 
     @Nullable
@@ -39,7 +39,7 @@ abstract class Table
         T returns = null;
         try (Statement statement = connection.createStatement())
         {
-            try (ResultSet results = statement.executeQuery("SELECT "+column+" FROM "+name+" "+mergeToString(where)))
+            try (ResultSet results = statement.executeQuery("SELECT "+column+" FROM "+table.name()+" "+mergeToString(where)))
             {
                 if(results.next())
                     returns = (T) results.getObject(column);
@@ -48,7 +48,12 @@ abstract class Table
         return returns;
     }
 
-    public abstract void create();
+    @SuppressWarnings("unused")
+    // This is really only necessary if for some reason we'd need to create an individual table
+    public void create() throws SQLException
+    {
+        table.createUsing(connection);
+    }
 
     private static String mergeToString(String... params)
     {
