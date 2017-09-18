@@ -34,7 +34,7 @@ public class RatingsTable extends Table
      * col short RATING
      */
 
-    public RatingsTable(Connection connection)
+    RatingsTable(Connection connection)
     {
         super(connection, "RATINGS");
     }
