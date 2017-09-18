@@ -1,0 +1,20 @@
+# Gradle Files
+/build/
+/.gradle/
+/out/
+
+# Intellij Files
+/.idea/
+*.iml
+*.ipr
+*.iws
+
+# Netbeans Files
+/.nb-gradle/
+*.nb-gradle-properties
+
+# Project Files
+src/test/
+*.json
+*.txt
+*.db
