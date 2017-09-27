@@ -34,23 +34,48 @@ version '0.1'
 
 mainClassName = "${group}.Bot"
 
-def jda = '3.3.0_271'
-def jda_utils = '1.7'
+def jda = '3.3.1_281'
+def jda_utils = 'development-SNAPSHOT'
 
 sourceCompatibility = 1.8
+
+sourceSets {
+    test.java.srcDirs += 'src/test/java'
+    test {
+        compileClasspath = main.output + main.resources
+        runtimeClasspath = main.output + main.resources
+    }
+}
 
 repositories {
     jcenter()
     mavenCentral()
+    maven { url 'https://jitpack.io/' }
 }
 
 dependencies {
     // JDA
     compile "net.dv8tion:JDA:$jda"
-    compile "com.jagrosh:JDA-Utilities:$jda_utils"
+    compile "com.github.jagrosh:JDA-Utilities:$jda_utils"
+    compile "org.slf4j:slf4j-api:1.7.25"
 
     // h2
     compile 'com.h2database:h2:1.4.196'
 
     testCompile group: 'junit', name: 'junit', version: '4.12'
+}
+
+shadowJar {
+    classifier = ''
+    version = ''
+    baseName = "BalloonBoat"
+}
+
+build {
+    dependsOn clean
+    dependsOn classes
+    dependsOn shadowJar
+
+    classes.mustRunAfter clean
+    shadowJar.mustRunAfter classes
 }

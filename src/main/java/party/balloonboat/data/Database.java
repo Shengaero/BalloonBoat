@@ -15,13 +15,19 @@
  */
 package party.balloonboat.data;
 
+import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.entities.Guild;
+import net.dv8tion.jda.core.entities.Member;
 import net.dv8tion.jda.core.entities.Role;
 import net.dv8tion.jda.core.entities.User;
-import net.dv8tion.jda.core.utils.SimpleLog;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.sql.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -30,7 +36,7 @@ import java.util.function.Consumer;
 @SuppressWarnings("unused")
 public class Database
 {
-    public static final SimpleLog LOG = SimpleLog.getLog("Database");
+    public static final Logger LOG = LoggerFactory.getLogger("Database");
 
     private final Connection connection;
     private final CalculationsTable calcTable;
@@ -64,8 +70,7 @@ public class Database
                         table.createUsing(connection);
                 }
             } catch(SQLException e) {
-                LOG.warn("Failed to create table "+table.name());
-                LOG.warn(e);
+                LOG.warn("Failed to create table "+table.name(),e);
                 return false;
             }
         }
@@ -82,7 +87,7 @@ public class Database
         try {
             return ratings.getRating(userId, targetId);
         } catch(SQLException e) {
-            LOG.warn(e);
+            LOG.warn("Encountered an SQLException: ",e);
             return -1;
         }
     }
@@ -97,7 +102,7 @@ public class Database
         try {
             return calcTable.getUserRating(userId);
         } catch(SQLException e) {
-            LOG.warn(e);
+            LOG.warn("Encountered an SQLException: ",e);
             return -1;
         }
     }
@@ -112,7 +117,7 @@ public class Database
         try {
             ratings.setRating(userId, targetId, rating);
         } catch(SQLException e) {
-            LOG.warn(e);
+            LOG.warn("Encountered an SQLException: ",e);
         }
     }
 
@@ -126,7 +131,32 @@ public class Database
         try {
             ratings.setRating(userRating, userId, targetId, rating);
         } catch(SQLException e) {
-            LOG.warn(e);
+            LOG.warn("Encountered an SQLException: ",e);
+        }
+    }
+
+    public List<Member> getMembersByRating(short rating, Guild guild)
+    {
+        try {
+            return calcTable.getMembersByRating(rating, guild);
+        } catch(SQLException e) {
+            LOG.warn("Encountered an SQLException", e);
+            return Collections.emptyList();
+        }
+    }
+
+    public Map<User, Short> getRatingsByUser(User user, JDA jda)
+    {
+        return getRatingsByUser(user.getIdLong(), jda);
+    }
+
+    public Map<User, Short> getRatingsByUser(long userId, JDA jda)
+    {
+        try {
+            return ratings.getRatingsByUser(userId, jda);
+        } catch(SQLException e) {
+            LOG.warn("Encountered an SQLException: ",e);
+            return Collections.emptyMap();
         }
     }
 
@@ -141,7 +171,7 @@ public class Database
             else
                 role = guild.getRoleById(roleId);
         } catch(SQLException e) {
-            LOG.warn(e);
+            LOG.warn("Encountered an SQLException: ",e);
             role = null;
         }
         return role;
@@ -152,7 +182,7 @@ public class Database
         try {
             guildSettings.setRole(role, number);
         } catch(SQLException e) {
-            LOG.warn(e);
+            LOG.warn("Encountered an SQLException: ",e);
         }
     }
 
@@ -161,7 +191,7 @@ public class Database
         try {
             return privateSettings.isUsingDMChanges(user);
         } catch(SQLException e) {
-            LOG.warn(e);
+            LOG.warn("Encountered an SQLException: ",e);
             return false; // Default to false
         }
     }
@@ -171,7 +201,7 @@ public class Database
         try {
             privateSettings.setUsingDMChanges(user, isUsing);
         } catch(SQLException e) {
-            LOG.warn(e);
+            LOG.warn("Encountered an SQLException: ",e);
         }
     }
 
@@ -203,7 +233,7 @@ public class Database
         try {
             connection.getMetaData();
         } catch(SQLException e) {
-            LOG.warn(e);
+            LOG.warn("Encountered an SQLException: ",e);
         }
 
         return System.currentTimeMillis() - start;
@@ -216,7 +246,7 @@ public class Database
             connection.close();
             LOG.info("JDBC connection has been closed!");
         } catch(SQLException e) {
-            LOG.warn(e);
+            LOG.warn("Encountered an SQLException: ",e);
         }
     }
 

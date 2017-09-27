@@ -15,6 +15,8 @@
  */
 package party.balloonboat.data;
 
+import net.dv8tion.jda.core.JDA;
+import net.dv8tion.jda.core.entities.User;
 import party.balloonboat.utils.AlgorithmUtils;
 
 import java.sql.Connection;
@@ -22,7 +24,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author Kaidan Gustave
@@ -76,6 +80,26 @@ public class RatingsTable extends TableHandler
             }
         }
         return returns;
+    }
+
+    public Map<User, Short> getRatingsByUser(long userId, JDA jda) throws SQLException
+    {
+        Map<User, Short> map = new HashMap<>();
+        try (Statement statement = connection.createStatement())
+        {
+            try (ResultSet results = statement.executeQuery(
+                    "SELECT TARGET_ID, RATING FROM RATINGS WHERE USER_ID = "+userId
+            ))
+            {
+                while(results.next())
+                {
+                    User user = jda.getUserById(results.getLong("TARGET_ID"));
+                    if(user != null)
+                        map.put(user, results.getShort("RATING"));
+                }
+            }
+        }
+        return map;
     }
 
     public void setRating(short userRating, long userId, long targetId, short rating) throws SQLException

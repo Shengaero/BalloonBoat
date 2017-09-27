@@ -16,18 +16,20 @@
 package party.balloonboat;
 
 import com.jagrosh.jdautilities.commandclient.CommandClientBuilder;
+import com.jagrosh.jdautilities.waiter.EventWaiter;
 import net.dv8tion.jda.core.AccountType;
 import net.dv8tion.jda.core.JDABuilder;
+import net.dv8tion.jda.core.entities.Role;
 import net.dv8tion.jda.core.events.ShutdownEvent;
+import net.dv8tion.jda.core.events.guild.member.GuildMemberJoinEvent;
 import net.dv8tion.jda.core.exceptions.RateLimitedException;
 import net.dv8tion.jda.core.hooks.ListenerAdapter;
-import net.dv8tion.jda.core.utils.SimpleLog;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import party.balloonboat.commands.EvalCommand;
-import party.balloonboat.commands.PingCommand;
-import party.balloonboat.commands.ShutdownCommand;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import party.balloonboat.commands.*;
 import party.balloonboat.data.Database;
 import javax.security.auth.login.LoginException;
 import java.io.IOException;
@@ -42,7 +44,7 @@ import java.sql.SQLException;
 @SuppressWarnings("unused")
 public class Bot extends ListenerAdapter
 {
-    public static final SimpleLog LOG = SimpleLog.getLog("Bot");
+    public static final Logger LOG = LoggerFactory.getLogger("Bot");
 
     public static void main(String[] args)
     {
@@ -50,8 +52,7 @@ public class Bot extends ListenerAdapter
             LOG.info("Initializing BalloonBoat...");
             new Bot();
         } catch(Exception e) {
-            LOG.fatal("An exception was thrown while starting the bot!");
-            LOG.fatal(e);
+            LOG.error("An exception was thrown while starting the bot!", e);
         }
     }
 
@@ -59,7 +60,8 @@ public class Bot extends ListenerAdapter
 
     private Bot() throws IOException, SQLException, JSONException,
             LoginException, RateLimitedException, IllegalAccessException,
-            InstantiationException, ClassNotFoundException {
+            InstantiationException, ClassNotFoundException
+    {
         Config config = new Config(Paths.get(System.getProperty("user.dir"),"config.json"));
 
         this.database = new Database(
@@ -67,6 +69,8 @@ public class Bot extends ListenerAdapter
                 config.getDatabaseUsername(),
                 config.getDatabasePassword()
         );
+
+        EventWaiter waiter = new EventWaiter();
 
         CommandClientBuilder builder = new CommandClientBuilder();
 
@@ -84,6 +88,8 @@ public class Bot extends ListenerAdapter
         builder.addCommands(
                 new PingCommand(),
                 new EvalCommand(database),
+                new RateCommand(database),
+                new RatingsCommand(database, waiter),
                 new ShutdownCommand(database)
         );
 
@@ -101,14 +107,25 @@ public class Bot extends ListenerAdapter
 
         new JDABuilder(AccountType.BOT)
                 .setToken(config.getToken())
-                .addEventListener(builder.build())
+                .addEventListener(builder.build(), waiter)
                 .buildAsync();
     }
 
+    @Override
     public void onShutdown(ShutdownEvent event)
     {
         // ONLY shutdown database here
         database.shutdown();
+    }
+
+    @Override
+    public void onGuildMemberJoin(GuildMemberJoinEvent event)
+    {
+        short rating = database.getUserRating(event.getUser());
+
+        Role role = database.getRatingRole(event.getGuild(), rating);
+        if(role != null)
+            event.getGuild().getController().addRolesToMember(event.getMember(), role).queue(v -> {}, v -> {});
     }
 
     public static class Config

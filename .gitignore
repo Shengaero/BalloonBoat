@@ -18,3 +18,8 @@ src/test/
 *.json
 *.txt
 *.db
+*.jar
+*.sh
+
+# Secrets
+src/main/java/party/balloonboat/utils/AlgorithmUtils.java

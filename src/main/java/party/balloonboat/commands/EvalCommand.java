@@ -33,9 +33,9 @@ public class EvalCommand extends DatabaseCommand
     public EvalCommand(Database database)
     {
         super(database);
-        this.name = "eval";
-        this.aliases = new String[]{"evaluate"};
-        this.arguments = "<script>";
+        this.name = "Eval";
+        this.aliases = new String[]{"Evaluate"};
+        this.arguments = "<Script>";
         this.guildOnly = false;
         this.ownerCommand = true;
         this.usesTopicTags = false;
