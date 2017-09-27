@@ -15,12 +15,14 @@
  */
 package party.balloonboat.data;
 
-import net.dv8tion.jda.core.entities.User;
+import party.balloonboat.utils.AlgorithmUtils;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Kaidan Gustave
@@ -29,60 +31,164 @@ public class RatingsTable extends TableHandler
 {
     /*
      * RATINGS
-     * col long USER_ID
-     * col long TARGET_ID
-     * col short RATING
+     * col USER_RATING SMALLINT
+     * col USER_ID LONG
+     * col TARGET_ID LONG
+     * col RATING SMALLINT
      */
 
-    public RatingsTable(Connection connection)
+    private final CalculationsTable calcTable;
+
+    public RatingsTable(Connection connection, CalculationsTable calcTable)
     {
         super(connection, Database.Table.RATINGS);
+        this.calcTable = calcTable;
     }
 
-    public boolean hasRow(User user, User target) throws SQLException
+    public boolean hasRated(long userId, long targetId) throws SQLException
     {
-        boolean returns;
+        final boolean returns;
         try (Statement statement = connection.createStatement())
         {
-            try (ResultSet results = statement.executeQuery(
-                    "SELECT * FROM "+table.name()+" WHERE USER_ID = "+user.getIdLong()+" AND TARGET_ID = "+target.getIdLong()))
+            try (ResultSet set = statement.executeQuery(
+                    "SELECT * FROM RATINGS WHERE USER_ID = "+userId+" AND TARGET_ID = "+targetId
+            ))
             {
-                // if there is a row then it will be true, if not it will be false
-                returns = results.next();
+                returns = set.next();
             }
         }
         return returns;
     }
 
-    public short getRating(User user, User target) throws SQLException
+    public short getRating(long userId, long targetId) throws SQLException
     {
-        Short rating = select("RATING", "USER_ID = "+user.getIdLong(), "TARGET_ID = "+target.getIdLong());
-
-        return rating == null ? -1 : rating; // returns -1 if there is no rating
+        final short returns;
+        try (Statement statement = connection.createStatement())
+        {
+            try (ResultSet set = statement.executeQuery(
+                    "SELECT RATING FROM RATINGS " +
+                    "WHERE USER_ID = "+userId+" " +
+                    "AND TARGET_ID = "+targetId
+            ))
+            {
+                set.next();
+                returns = set.getShort("RATING");
+            }
+        }
+        return returns;
     }
 
-    public void setRating(User user, User target, short rating) throws SQLException
+    public void setRating(short userRating, long userId, long targetId, short rating) throws SQLException
     {
-        // If the pair of users have a row already we want to update it not create a new one
-        if(hasRow(user,target))
-            update(user.getIdLong(), target.getIdLong(), rating);
+        // Check if we're updating a row or inserting a new one
+        if(hasRated(userId, targetId))
+        {
+            try(Statement statement = connection.createStatement())
+            {
+                // Update USER_RATING and RATING simultaneously.
+                statement.execute(
+                        "UPDATE RATINGS SET USER_RATING = "+userRating+", RATING = "+rating+" WHERE" +
+                        " USER_ID = "+userId+" AND TARGET_ID = "+targetId
+                );
+            }
+        }
         else
-            add(user.getIdLong(), target.getIdLong(), rating);
+        {
+            try (Statement statement = connection.createStatement())
+            {
+                // Insertion statement
+                statement.execute(
+                        "INSERT INTO RATINGS (USER_RATING, USER_ID, TARGET_ID, RATING) VALUES" +
+                        "("+userRating+","+userId+","+targetId+","+rating+")"
+                );
+            }
+        }
+
+        checkAndReevaluated(targetId);
     }
 
-    private void update(long user, long target, short rating) throws SQLException
+    // May recurse back up to the method above!!
+    private void checkAndReevaluated(long userId) throws SQLException
     {
-        try (Statement statement = connection.createStatement())
+        List<Short[]> list = new ArrayList<>(5);
+
+        // For ranks 5 - 1
+        for(short i = 5; i >= 1; i--)
+            list.add(getAllTargetRatingsForRank(i, userId));
+
+        short userRatingBefore = calcTable.getUserRating(userId);
+        double trueRating = AlgorithmUtils.calculateRating(list);
+        short userRatingAfter = calcTable.setAndReturnUserRating(userId, trueRating);
+
+        // We reevaluate the ratings of the target if and only if their effective rating
+        // has changed by now.
+        // While this could recurse several times potentially, it will most certainly not
+        // go forever (please don't let me be wrong...)
+        if(userRatingAfter != userRatingBefore)
         {
-            statement.execute("UPDATE "+table.name()+" SET RATING = "+rating+" WHERE USER_ID = "+user+" TARGET_ID = "+target);
+            for(long targetId : getAllTargetsRated(userId))
+            {
+                // RECURSION //
+                setRating(userRatingAfter, userId, targetId, getRating(userId, targetId));
+            }
         }
     }
 
-    private void add(long user, long target, short rating) throws SQLException
+    public void setRating(long userId, long targetId, short rating) throws SQLException
     {
-        try (Statement statement = connection.createStatement())
+        setRating(calcTable.getUserRating(userId), userId, targetId, rating);
+    }
+
+    public Long[] getAllTargetsRated(long userId) throws SQLException
+    {
+        final Long[] returns;
+        try (Statement statement = connection.createStatement(
+                ResultSet.TYPE_SCROLL_INSENSITIVE,
+                ResultSet.CONCUR_READ_ONLY))
         {
-            statement.execute("INSERT INTO "+table.name()+" (USER_ID, TARGET_ID, RATING) VALUES ("+user+","+target+","+rating+")");
+            try(ResultSet set = statement.executeQuery(
+                    "SELECT TARGET_ID FROM RATINGS WHERE USER_ID = "+userId
+            ))
+            {
+                if(set.last())
+                    returns = new Long[set.getRow()];
+                else
+                    returns = new Long[0];
+                set.beforeFirst();
+                for(int i = 0; i < returns.length; i++)
+                {
+                    set.next();
+                    returns[i] = set.getLong("TARGET_ID");
+                }
+            }
         }
+        return returns;
+    }
+
+    public Short[] getAllTargetRatingsForRank(short rank, long targetId) throws SQLException
+    {
+        final Short[] returns;
+        try (Statement statement = connection.createStatement(
+                ResultSet.TYPE_SCROLL_INSENSITIVE,
+                ResultSet.CONCUR_READ_ONLY))
+        {
+            try (ResultSet set = statement.executeQuery(
+                    "SELECT RATING FROM RATINGS " +
+                    "WHERE USER_RATING = "+rank+" " +
+                    "AND NOT USER_ID = "+targetId+" " +
+                    "AND TARGET_ID = "+targetId
+            ))
+            {
+                set.last();
+                returns = new Short[set.getRow()];
+                set.beforeFirst();
+                for(int i = 0; i<returns.length; i++)
+                {
+                    set.next();
+                    returns[i] = set.getShort("RATING");
+                }
+            }
+        }
+        return returns;
     }
 }

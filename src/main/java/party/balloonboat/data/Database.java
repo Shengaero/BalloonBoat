@@ -33,6 +33,7 @@ public class Database
     public static final SimpleLog LOG = SimpleLog.getLog("Database");
 
     private final Connection connection;
+    private final CalculationsTable calcTable;
     private final RatingsTable ratings;
     private final GuildSettingsTable guildSettings;
     private final PrivateSettingsTable privateSettings;
@@ -45,7 +46,8 @@ public class Database
 
         connection = DriverManager.getConnection(url, user, pass);
 
-        ratings = new RatingsTable(connection);
+        calcTable = new CalculationsTable(connection);
+        ratings = new RatingsTable(connection, calcTable);
         guildSettings = new GuildSettingsTable(connection);
         privateSettings = new PrivateSettingsTable(connection);
     }
@@ -72,8 +74,28 @@ public class Database
 
     public short getRating(User user, User target)
     {
+        return getRating(user.getIdLong(), target.getIdLong());
+    }
+
+    public short getRating(long userId, long targetId)
+    {
         try {
-            return ratings.getRating(user, target);
+            return ratings.getRating(userId, targetId);
+        } catch(SQLException e) {
+            LOG.warn(e);
+            return -1;
+        }
+    }
+
+    public short getUserRating(User user)
+    {
+        return getUserRating(user.getIdLong());
+    }
+
+    public short getUserRating(long userId)
+    {
+        try {
+            return calcTable.getUserRating(userId);
         } catch(SQLException e) {
             LOG.warn(e);
             return -1;
@@ -82,8 +104,27 @@ public class Database
 
     public void setRating(User user, User target, short rating)
     {
+        setRating(user.getIdLong(), target.getIdLong(), rating);
+    }
+
+    public void setRating(long userId, long targetId, short rating)
+    {
         try {
-            ratings.setRating(user, target, rating);
+            ratings.setRating(userId, targetId, rating);
+        } catch(SQLException e) {
+            LOG.warn(e);
+        }
+    }
+
+    public void setRating(short userRating, User user, User target, short rating)
+    {
+        setRating(userRating, user.getIdLong(), target.getIdLong(), rating);
+    }
+
+    public void setRating(short userRating, long userId, long targetId, short rating)
+    {
+        try {
+            ratings.setRating(userRating, userId, targetId, rating);
         } catch(SQLException e) {
             LOG.warn(e);
         }
@@ -183,12 +224,13 @@ public class Database
     public enum Table
     {
         RATINGS(
+                "USER_RATING SMALLINT",
                 "USER_ID LONG",
                 "TARGET_ID LONG",
                 "RATING SMALLINT"
         ),
 
-        CALCULATED(
+        CALCULATIONS(
                 "USER_ID LONG",
                 "TRUE_RATING DOUBLE",
                 "EFFECTIVE_RATING SMALLINT"
