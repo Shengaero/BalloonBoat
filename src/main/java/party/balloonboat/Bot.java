@@ -15,11 +15,14 @@
  */
 package party.balloonboat;
 
+import com.jagrosh.jdautilities.commandclient.CommandClient;
 import com.jagrosh.jdautilities.commandclient.CommandClientBuilder;
 import com.jagrosh.jdautilities.waiter.EventWaiter;
 import net.dv8tion.jda.core.AccountType;
+import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.JDABuilder;
 import net.dv8tion.jda.core.entities.Role;
+import net.dv8tion.jda.core.events.ReadyEvent;
 import net.dv8tion.jda.core.events.ShutdownEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberJoinEvent;
 import net.dv8tion.jda.core.exceptions.RateLimitedException;
@@ -37,6 +40,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.SQLException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author Kaidan Gustave
@@ -44,7 +48,7 @@ import java.sql.SQLException;
 @SuppressWarnings("unused")
 public class Bot extends ListenerAdapter
 {
-    public static final Logger LOG = LoggerFactory.getLogger("Bot");
+    public static final Logger LOG = LoggerFactory.getLogger(Bot.class);
 
     public static void main(String[] args)
     {
@@ -74,6 +78,14 @@ public class Bot extends ListenerAdapter
 
         CommandClientBuilder builder = new CommandClientBuilder();
 
+        builder.addCommands(
+                new PingCommand(),
+                new EvalCommand(database),
+                new RateCommand(database),
+                new RatingsCommand(database, waiter),
+                new ShutdownCommand(database)
+        );
+
         builder.setPrefix(Config.PREFIX);
         builder.setPlaying(Config.GAME);
 
@@ -84,14 +96,6 @@ public class Bot extends ListenerAdapter
                 Config.SUCCESS_EMOJI,
                 Config.WARNING_EMOJI,
                 Config.ERROR_EMOJI);
-
-        builder.addCommands(
-                new PingCommand(),
-                new EvalCommand(database),
-                new RateCommand(database),
-                new RatingsCommand(database, waiter),
-                new ShutdownCommand(database)
-        );
 
         // Set Discord Bots Key
         if(config.getDiscordBotsKey() != null)
@@ -105,10 +109,23 @@ public class Bot extends ListenerAdapter
         if(config.getDiscordBotsListKey() != null)
             builder.setDiscordBotListKey(config.getDiscordBotsListKey());
 
-        new JDABuilder(AccountType.BOT)
+        CommandClient client = builder.build();
+
+        JDA jda = new JDABuilder(AccountType.BOT)
                 .setToken(config.getToken())
-                .addEventListener(builder.build(), waiter)
+                .addEventListener(client, waiter, this)
                 .buildAsync();
+    }
+
+    @Override
+    public void onReady(ReadyEvent event)
+    {
+        LOG.info("Starting Top Rating Updater...");
+        database.updateTopRatings(
+                event.getJDA().getTextChannelById(Config.TOP_USERS_CHAN_ID)
+                .getMessageById(Config.TOP_USERS_MSG_ID).complete(),
+                10, TimeUnit.SECONDS
+        );
     }
 
     @Override
@@ -136,6 +153,10 @@ public class Bot extends ListenerAdapter
         public static final String SUCCESS_EMOJI = "<:BalloonSuccess:359189166149599233>";
         public static final String WARNING_EMOJI = "<:BalloonWarning:359189166531018762>";
         public static final String ERROR_EMOJI = "<:BalloonError:359189166439006209> ";
+        public static final long HUB_GUILD_ID = 359185709749501953L;
+        public static final long TOP_USERS_CHAN_ID = 359187922928402444L;
+        public static final long TOP_USERS_MSG_ID = 362750549688320000L;
+        public static final long RATING_LOG_ID = 359197829367070741L;
 
         // Non-Static Configurations
         private final long jagroshId;

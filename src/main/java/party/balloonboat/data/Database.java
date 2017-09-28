@@ -16,18 +16,19 @@
 package party.balloonboat.data;
 
 import net.dv8tion.jda.core.JDA;
-import net.dv8tion.jda.core.entities.Guild;
-import net.dv8tion.jda.core.entities.Member;
-import net.dv8tion.jda.core.entities.Role;
-import net.dv8tion.jda.core.entities.User;
+import net.dv8tion.jda.core.entities.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import party.balloonboat.Bot;
 
 import javax.annotation.Nullable;
 import java.sql.*;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -36,9 +37,11 @@ import java.util.function.Consumer;
 @SuppressWarnings("unused")
 public class Database
 {
-    public static final Logger LOG = LoggerFactory.getLogger("Database");
+    private static final Logger LOG = LoggerFactory.getLogger(Database.class);
+    private static final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
     private final Connection connection;
+
     private final CalculationsTable calcTable;
     private final RatingsTable ratings;
     private final GuildSettingsTable guildSettings;
@@ -75,6 +78,41 @@ public class Database
             }
         }
         return true;
+    }
+
+    // Only fire this once!
+    public void updateTopRatings(Message message, long delay, TimeUnit unit)
+    {
+        StringBuilder b = new StringBuilder();
+
+        b.append(Bot.Config.SUCCESS_EMOJI)
+         .append(" __**TOP RATED USERS**__ ")
+         .append(Bot.Config.SUCCESS_EMOJI).append("\n\n");
+
+        try {
+            int i = 1;
+            for(User user : calcTable.getTop5(message.getJDA()))
+            {
+                b.append(String.format("`%d` - **%#s**", i, user)).append("\n\n");
+                i++;
+            }
+
+        } catch(SQLException e) {
+
+            LOG.warn("Encountered an SQLException: ",e);
+
+            // Retry again later
+            executor.schedule(() -> updateTopRatings(message,delay,unit), delay, unit);
+            return;
+        }
+
+        // Update again later
+        message.editMessage(b.toString().trim()).queueAfter(
+                delay, unit,
+                msg -> updateTopRatings(message, delay, unit),
+                err -> updateTopRatings(message, delay, unit),
+                executor
+        );
     }
 
     public short getRating(User user, User target)
@@ -241,6 +279,7 @@ public class Database
 
     public void shutdown()
     {
+        executor.shutdownNow();
         LOG.info("Attempting to close JDBC connection...");
         try {
             connection.close();

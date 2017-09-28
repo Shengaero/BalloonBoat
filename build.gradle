@@ -58,6 +58,8 @@ dependencies {
     compile "net.dv8tion:JDA:$jda"
     compile "com.github.jagrosh:JDA-Utilities:$jda_utils"
     compile "org.slf4j:slf4j-api:1.7.25"
+    compile 'ch.qos.logback:logback-classic:1.2.3'
+
 
     // h2
     compile 'com.h2database:h2:1.4.196'

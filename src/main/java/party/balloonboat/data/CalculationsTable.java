@@ -15,8 +15,10 @@
  */
 package party.balloonboat.data;
 
+import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.entities.Guild;
 import net.dv8tion.jda.core.entities.Member;
+import net.dv8tion.jda.core.entities.User;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -60,6 +62,26 @@ public class CalculationsTable extends TableHandler
                     "("+userId+","+trueRating+","+effectiveRating+")"
             );
         }
+    }
+
+    public List<User> getTop5(JDA jda) throws SQLException
+    {
+        List<User> users = new ArrayList<>();
+        try (Statement statement = connection.createStatement())
+        {
+            try (ResultSet results = statement.executeQuery(
+                    "SELECT USER_ID FROM "+table.name()+" ORDER BY TRUE_RATING DESC"
+            ))
+            {
+                int i = 0;
+                while(results.next() && i < 5)
+                {
+                    users.add(jda.retrieveUserById(results.getLong("USER_ID")).complete());
+                    i++;
+                }
+            }
+        }
+        return users;
     }
 
     public List<Member> getMembersByRating(short rating, Guild guild) throws SQLException
