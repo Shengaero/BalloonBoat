@@ -64,7 +64,7 @@ public class CalculationsTable extends TableHandler
         }
     }
 
-    public List<User> getTop5(JDA jda) throws SQLException
+    public List<User> getTop10(JDA jda) throws SQLException
     {
         List<User> users = new ArrayList<>();
         try (Statement statement = connection.createStatement())
@@ -74,7 +74,7 @@ public class CalculationsTable extends TableHandler
             ))
             {
                 int i = 0;
-                while(results.next() && i < 5)
+                while(results.next() && i < 10)
                 {
                     users.add(jda.retrieveUserById(results.getLong("USER_ID")).complete());
                     i++;
@@ -103,7 +103,7 @@ public class CalculationsTable extends TableHandler
         return list;
     }
 
-    public short getUserRating(long userId) throws SQLException
+    public short getUserRating(long userId, boolean initRatingAutomatically) throws SQLException
     {
         final short returns;
         try (Statement statement = connection.createStatement())
@@ -115,11 +115,13 @@ public class CalculationsTable extends TableHandler
             {
                 if(results.next())
                     returns = results.getShort("EFFECTIVE_RATING");
-                else
+                else if(initRatingAutomatically)
                 {
                     returns = 1;
                     registerUser(userId, 1.0, returns);
                 }
+                else
+                    returns = -1;
             }
         }
         return returns;

@@ -28,6 +28,7 @@ public class PingCommand extends Command
     public PingCommand()
     {
         this.name = "Ping";
+        this.aliases = new String[]{ "Pong", "Pang", "Pung", "Pyng", "Peng", "Png" };
         this.help = "Gets the bot's latency.";
         this.usesTopicTags = false;
         this.guildOnly = false;

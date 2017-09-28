@@ -19,7 +19,6 @@ import com.jagrosh.jdautilities.commandclient.CommandClient;
 import com.jagrosh.jdautilities.commandclient.CommandClientBuilder;
 import com.jagrosh.jdautilities.waiter.EventWaiter;
 import net.dv8tion.jda.core.AccountType;
-import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.JDABuilder;
 import net.dv8tion.jda.core.entities.Role;
 import net.dv8tion.jda.core.events.ReadyEvent;
@@ -45,7 +44,6 @@ import java.util.concurrent.TimeUnit;
 /**
  * @author Kaidan Gustave
  */
-@SuppressWarnings("unused")
 public class Bot extends ListenerAdapter
 {
     public static final Logger LOG = LoggerFactory.getLogger(Bot.class);
@@ -68,10 +66,12 @@ public class Bot extends ListenerAdapter
     {
         Config config = new Config(Paths.get(System.getProperty("user.dir"),"config.json"));
 
-        this.database = new Database(
+        database = new Database(
                 config.getDatabasePathname(),
                 config.getDatabaseUsername(),
-                config.getDatabasePassword()
+                config.getDatabasePassword(),
+                config.getWebhookId(),
+                config.getWebhookToken()
         );
 
         EventWaiter waiter = new EventWaiter();
@@ -79,16 +79,18 @@ public class Bot extends ListenerAdapter
         CommandClientBuilder builder = new CommandClientBuilder();
 
         builder.addCommands(
+                new LinkRoleCommand(database),
                 new PingCommand(),
-                new EvalCommand(database),
                 new RateCommand(database),
+                new RatingCommand(database, waiter),
                 new RatingsCommand(database, waiter),
+                new EvalCommand(database),
                 new ShutdownCommand(database)
         );
 
         builder.setPrefix(Config.PREFIX);
         builder.setPlaying(Config.GAME);
-
+        builder.setServerInvite(Config.HUB_SERVER_INVITE);
         builder.setOwnerId(config.getJagroshId());    // jagrosh
         builder.setCoOwnerIds(config.getMonitorId()); // monitor
 
@@ -109,9 +111,16 @@ public class Bot extends ListenerAdapter
         if(config.getDiscordBotsListKey() != null)
             builder.setDiscordBotListKey(config.getDiscordBotsListKey());
 
+        builder.setClientLogger((isError, msg) -> {
+            if(isError)
+                LOG.error(msg);
+            else
+                LOG.info(msg);
+        });
+
         CommandClient client = builder.build();
 
-        JDA jda = new JDABuilder(AccountType.BOT)
+        new JDABuilder(AccountType.BOT)
                 .setToken(config.getToken())
                 .addEventListener(client, waiter, this)
                 .buildAsync();
@@ -124,8 +133,10 @@ public class Bot extends ListenerAdapter
         database.updateTopRatings(
                 event.getJDA().getTextChannelById(Config.TOP_USERS_CHAN_ID)
                 .getMessageById(Config.TOP_USERS_MSG_ID).complete(),
-                10, TimeUnit.SECONDS
+                5, TimeUnit.MINUTES
         );
+
+        database.updateRoles(event.getJDA(), 30, TimeUnit.MINUTES);
     }
 
     @Override
@@ -138,11 +149,23 @@ public class Bot extends ListenerAdapter
     @Override
     public void onGuildMemberJoin(GuildMemberJoinEvent event)
     {
+        // Add roles to new member
+
         short rating = database.getUserRating(event.getUser());
 
+        if(rating == -1)
+            return;
+
         Role role = database.getRatingRole(event.getGuild(), rating);
-        if(role != null)
+
+        // Role is not null
+        // Can interact with role
+        // Can interact with member
+        if(role != null && event.getGuild().getSelfMember().canInteract(role)
+                && event.getGuild().getSelfMember().canInteract(event.getMember()))
+        {
             event.getGuild().getController().addRolesToMember(event.getMember(), role).queue(v -> {}, v -> {});
+        }
     }
 
     public static class Config
@@ -153,10 +176,9 @@ public class Bot extends ListenerAdapter
         public static final String SUCCESS_EMOJI = "<:BalloonSuccess:359189166149599233>";
         public static final String WARNING_EMOJI = "<:BalloonWarning:359189166531018762>";
         public static final String ERROR_EMOJI = "<:BalloonError:359189166439006209> ";
-        public static final long HUB_GUILD_ID = 359185709749501953L;
+        public static final String HUB_SERVER_INVITE = "https://discord.gg/A2XmF9a";
         public static final long TOP_USERS_CHAN_ID = 359187922928402444L;
         public static final long TOP_USERS_MSG_ID = 362750549688320000L;
-        public static final long RATING_LOG_ID = 359197829367070741L;
 
         // Non-Static Configurations
         private final long jagroshId;
@@ -165,6 +187,8 @@ public class Bot extends ListenerAdapter
         private final String databaseUsername;
         private final String databasePassword;
         private final String databasePathname;
+        private final long webhookId;
+        private final String webhookToken;
         private final String discordBotsKey;
         private final String carbonitexKey;
         private final String discordBotsListKey;
@@ -183,6 +207,8 @@ public class Bot extends ListenerAdapter
             this.databaseUsername = json.getString("database_username");
             this.databasePassword = json.getString("database_password");
             this.databasePathname = json.getString("database_pathname");
+            this.webhookId = json.getLong("webhook_id");
+            this.webhookToken = json.getString("webhook_token");
 
             this.discordBotsKey = json.optString("discord_bots_key", null);
             this.carbonitexKey = json.optString("carbonitex_key", null);
@@ -232,6 +258,16 @@ public class Bot extends ListenerAdapter
         public String getDiscordBotsListKey()
         {
             return discordBotsListKey;
+        }
+
+        public long getWebhookId()
+        {
+            return webhookId;
+        }
+
+        public String getWebhookToken()
+        {
+            return webhookToken;
         }
     }
 }

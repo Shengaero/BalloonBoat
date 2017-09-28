@@ -15,14 +15,18 @@
  */
 package party.balloonboat.data;
 
+import net.dv8tion.jda.core.EmbedBuilder;
 import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.entities.*;
+import net.dv8tion.jda.webhook.WebhookClient;
+import net.dv8tion.jda.webhook.WebhookClientBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import party.balloonboat.Bot;
 
 import javax.annotation.Nullable;
 import java.sql.*;
+import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +43,7 @@ public class Database
 {
     private static final Logger LOG = LoggerFactory.getLogger(Database.class);
     private static final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+    private static final String WEBHOOK_FORMAT = "%s **%s**#%s (ID: %d) rated **%s**#%s (ID: %d) as `%d`";
 
     private final Connection connection;
 
@@ -46,8 +51,9 @@ public class Database
     private final RatingsTable ratings;
     private final GuildSettingsTable guildSettings;
     private final PrivateSettingsTable privateSettings;
+    private final WebhookClient webhook;
 
-    public Database(String url, String user, String pass)
+    public Database(String url, String user, String pass, long webhookId, String webhookToken)
             throws SQLException, ClassNotFoundException, IllegalAccessException, InstantiationException
     {
 
@@ -59,6 +65,8 @@ public class Database
         ratings = new RatingsTable(connection, calcTable);
         guildSettings = new GuildSettingsTable(connection);
         privateSettings = new PrivateSettingsTable(connection);
+
+        webhook = new WebhookClientBuilder(webhookId, webhookToken).setExecutorService(executor).build();
     }
 
     public boolean init()
@@ -83,22 +91,18 @@ public class Database
     // Only fire this once!
     public void updateTopRatings(Message message, long delay, TimeUnit unit)
     {
-        StringBuilder b = new StringBuilder();
+        EmbedBuilder b = new EmbedBuilder();
 
-        b.append(Bot.Config.SUCCESS_EMOJI)
-         .append(" __**TOP RATED USERS**__ ")
-         .append(Bot.Config.SUCCESS_EMOJI).append("\n\n");
+        b.setTitle(Bot.Config.SUCCESS_EMOJI + " __**TOP RATED USERS**__ " + Bot.Config.SUCCESS_EMOJI);
 
         try {
             int i = 1;
-            for(User user : calcTable.getTop5(message.getJDA()))
+            for(User user : calcTable.getTop10(message.getJDA()))
             {
-                b.append(String.format("`%d` - **%#s**", i, user)).append("\n\n");
+                b.appendDescription("`"+i+"` - ").appendDescription(user.getAsMention()).appendDescription("\n");
                 i++;
             }
-
         } catch(SQLException e) {
-
             LOG.warn("Encountered an SQLException: ",e);
 
             // Retry again later
@@ -106,13 +110,49 @@ public class Database
             return;
         }
 
+        b.setColor(message.getGuild().getSelfMember().getColor());
+        b.setFooter("Last Updated", null);
+        b.setTimestamp(message.getEditedTime().plus(5, ChronoUnit.MINUTES));
+
         // Update again later
-        message.editMessage(b.toString().trim()).queueAfter(
+        message.editMessage(b.build()).queueAfter(
                 delay, unit,
                 msg -> updateTopRatings(message, delay, unit),
                 err -> updateTopRatings(message, delay, unit),
                 executor
         );
+    }
+
+    // Only fire this once!
+    public void updateRoles(JDA jda, long delay, TimeUnit unit)
+    {
+        jda.getGuilds().forEach(guild -> {
+            for(short rating = 1; rating <= 5; rating++)
+            {
+                Role role = getRatingRole(guild, rating);
+
+                // There is a role
+                if(role != null)
+                {
+                    getMembersByRating(rating, guild).forEach(member -> {
+                        guild.getController().addRolesToMember(member, role).queue(v -> {}, v -> {});
+                    });
+                }
+            }
+        });
+
+        executor.schedule(() -> updateRoles(jda, delay, unit), delay, unit);
+    }
+
+    public boolean ratingEquals(User user, User target, short rating)
+    {
+        try {
+            return ratings.hasRated(user.getIdLong(), target.getIdLong())
+                    && getRating(user, target) == rating;
+        } catch(SQLException e) {
+            LOG.warn("Encountered an SQLException: ",e);
+            return false;
+        }
     }
 
     public short getRating(User user, User target)
@@ -138,36 +178,33 @@ public class Database
     public short getUserRating(long userId)
     {
         try {
-            return calcTable.getUserRating(userId);
+            return calcTable.getUserRating(userId, true);
         } catch(SQLException e) {
             LOG.warn("Encountered an SQLException: ",e);
             return -1;
         }
     }
 
-    public void setRating(User user, User target, short rating)
-    {
-        setRating(user.getIdLong(), target.getIdLong(), rating);
-    }
-
-    public void setRating(long userId, long targetId, short rating)
+    public Map<Long, Short> getUsersWhoRated(User user)
     {
         try {
-            ratings.setRating(userId, targetId, rating);
+            return ratings.getAllUsersRating(user.getIdLong());
         } catch(SQLException e) {
             LOG.warn("Encountered an SQLException: ",e);
+            return Collections.emptyMap();
         }
     }
 
-    public void setRating(short userRating, User user, User target, short rating)
-    {
-        setRating(userRating, user.getIdLong(), target.getIdLong(), rating);
-    }
-
-    public void setRating(short userRating, long userId, long targetId, short rating)
+    public void setRating(User user, User target, short rating)
     {
         try {
-            ratings.setRating(userRating, userId, targetId, rating);
+            // Sends rating to the database
+            ratings.setRating(user.getIdLong(), target.getIdLong(), rating);
+
+            webhook.send(String.format(WEBHOOK_FORMAT, Bot.Config.SUCCESS_EMOJI,
+                    user.getName(), user.getDiscriminator(), user.getIdLong(),
+                    target.getName(), target.getDiscriminator(), target.getIdLong(),
+                    rating));
         } catch(SQLException e) {
             LOG.warn("Encountered an SQLException: ",e);
         }
@@ -279,7 +316,11 @@ public class Database
 
     public void shutdown()
     {
+        // Close webhook
+        webhook.close();
+
         executor.shutdownNow();
+
         LOG.info("Attempting to close JDBC connection...");
         try {
             connection.close();

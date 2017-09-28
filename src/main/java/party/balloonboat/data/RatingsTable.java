@@ -140,7 +140,7 @@ public class RatingsTable extends TableHandler
         for(short i = 5; i >= 1; i--)
             list.add(getAllTargetRatingsForRank(i, userId));
 
-        short userRatingBefore = calcTable.getUserRating(userId);
+        short userRatingBefore = calcTable.getUserRating(userId, true);
         double trueRating = AlgorithmUtils.calculateRating(list);
         short userRatingAfter = calcTable.setAndReturnUserRating(userId, trueRating);
 
@@ -160,7 +160,24 @@ public class RatingsTable extends TableHandler
 
     public void setRating(long userId, long targetId, short rating) throws SQLException
     {
-        setRating(calcTable.getUserRating(userId), userId, targetId, rating);
+        setRating(calcTable.getUserRating(userId, true), userId, targetId, rating);
+    }
+
+    // Gets all user ids rating another user id
+    public Map<Long, Short> getAllUsersRating(long userId) throws SQLException
+    {
+        Map<Long, Short> map = new HashMap<>();
+        try (Statement statement = connection.createStatement())
+        {
+            try (ResultSet results = statement.executeQuery("SELECT * FROM "+table.name()+" WHERE TARGET_ID = "+userId))
+            {
+                while(results.next())
+                {
+                    map.put(results.getLong("USER_ID"), results.getShort("RATING"));
+                }
+            }
+        }
+        return map;
     }
 
     public Long[] getAllTargetsRated(long userId) throws SQLException

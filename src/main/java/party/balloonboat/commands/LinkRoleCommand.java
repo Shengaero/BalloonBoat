@@ -17,7 +17,8 @@ package party.balloonboat.commands;
 
 import com.jagrosh.jdautilities.commandclient.CommandEvent;
 import com.jagrosh.jdautilities.utils.FinderUtil;
-import net.dv8tion.jda.core.entities.Member;
+import net.dv8tion.jda.core.Permission;
+import net.dv8tion.jda.core.entities.Role;
 import party.balloonboat.data.Database;
 import party.balloonboat.utils.FormatUtils;
 
@@ -26,29 +27,31 @@ import java.util.List;
 /**
  * @author Kaidan Gustave
  */
-public class RateCommand extends DatabaseCommand
+public class LinkRoleCommand extends DatabaseCommand
 {
-    public RateCommand(Database database)
+    public LinkRoleCommand(Database database)
     {
         super(database);
-        this.name = "Rate";
-        this.aliases = new String[]{"R"};
-        this.arguments = "[1-5] [User]";
-        this.help = "Rates another user 1-5.";
+        this.name = "LinkRole";
+        this.arguments = "[1-5] [Role]";
+        this.help = "Links a role with a rating 1-5.";
         this.cooldown = 5;
-        this.cooldownScope = CooldownScope.USER;
+        this.cooldownScope = CooldownScope.GUILD;
         this.guildOnly = true;
-        this.usesTopicTags = true;
+        this.usesTopicTags = false;
+        this.userPermissions = new Permission[] { Permission.MANAGE_SERVER };
+        this.botPermissions = new Permission[]  { Permission.MANAGE_ROLES  };
     }
 
     @Override
     protected void execute(CommandEvent event)
     {
+
         String[] parts = event.getArgs().split("\\s+",2);
 
         if(parts.length < 2)
         {
-            event.replyError("Too few arguments! Try specifying a number 1 and 5 and then a user to rate!");
+            event.replyError("Too few arguments! Try specifying a number 1 and 5 and then a role to link!");
             return;
         }
 
@@ -67,36 +70,36 @@ public class RateCommand extends DatabaseCommand
             return;
         }
 
-        List<Member> members = FinderUtil.findMembers(parts[1], event.getGuild());
+        List<Role> roles = FinderUtil.findRoles(parts[1], event.getGuild());
 
-        if(members.size() > 1)
+        if(roles.size() > 1)
         {
-            event.replyError(FormatUtils.tooManyMembers(parts[1],members));
+            event.replyError(FormatUtils.tooManyRoles(parts[1],roles));
             return;
         }
 
-        if(members.size() < 1)
+        if(roles.size() < 1)
         {
-            event.replyError("Could not find a user matching \""+parts[1]+"\"!");
+            event.replyError("Could not find a role matching \""+parts[1]+"\"!");
             return;
         }
 
-        Member member = members.get(0);
+        Role role = roles.get(0);
 
-        if(member.equals(event.getMember()))
+        Role previous = database.getRatingRole(event.getGuild(), rating);
+
+        if(previous != null && previous.equals(role))
         {
-            event.replyError("You cannot rate yourself!");
+            event.replyWarning(role.getName()+" is already the role for users with a rating of `"+rating+"`!");
             return;
         }
 
-        if(database.ratingEquals(event.getAuthor(), member.getUser(), rating))
-        {
-            event.replyWarning("You've already rated "+member.getUser().getName()+" a `"+rating+"`!");
-            return;
-        }
+        database.setRatingRole(role, rating);
 
-        database.setRating(event.getAuthor(), member.getUser(), rating);
+        event.replySuccess("Set "+role.getName()+" as the role for users with a rating of `"+rating+"`!");
 
-        event.replySuccess(String.format("You rated **%#s** a `%d/5`", member.getUser(), rating));
+        database.getMembersByRating(rating, event.getGuild()).forEach(member -> {
+            event.getGuild().getController().addRolesToMember(member, role).queue(v -> {}, v -> {});
+        });
     }
 }
