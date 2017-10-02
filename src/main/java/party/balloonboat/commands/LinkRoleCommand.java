@@ -17,6 +17,7 @@ package party.balloonboat.commands;
 
 import com.jagrosh.jdautilities.commandclient.CommandEvent;
 import com.jagrosh.jdautilities.utils.FinderUtil;
+import net.dv8tion.jda.core.EmbedBuilder;
 import net.dv8tion.jda.core.Permission;
 import net.dv8tion.jda.core.entities.Role;
 import party.balloonboat.data.Database;
@@ -33,6 +34,7 @@ public class LinkRoleCommand extends DatabaseCommand
     {
         super(database);
         this.name = "LinkRole";
+        this.aliases = new String[]{ "LinkRoles", "LinkedRole", "LinkedRoles" };
         this.arguments = "[1-5] [Role]";
         this.help = "Links a role with a rating 1-5.";
         this.cooldown = 5;
@@ -46,12 +48,40 @@ public class LinkRoleCommand extends DatabaseCommand
     @Override
     protected void execute(CommandEvent event)
     {
+        // Lists them when no arguments are provided
+        if(event.getArgs().isEmpty())
+        {
+            EmbedBuilder b = new EmbedBuilder();
+
+            boolean hasNone = true;
+            for(short i = 5; i > 0; i++)
+            {
+                Role role = database.getRatingRole(event.getGuild(), i);
+                if(role != null)
+                {
+                    b.appendDescription("`"+i+"` - ").appendDescription(role.getAsMention()).appendDescription("\n");
+                    hasNone = false;
+                }
+            }
+
+            if(hasNone)
+            {
+                event.replyError("It doesn't look like this server has any linked roles!");
+                return;
+            }
+
+            b.setColor(event.getSelfMember().getColor());
+            b.setTitle("Linked Roles On **"+event.getGuild().getName()+"**");
+            event.reply(b.build());
+            return;
+        }
 
         String[] parts = event.getArgs().split("\\s+",2);
 
+        // Too few args
         if(parts.length < 2)
         {
-            event.replyError("Too few arguments! Try specifying a number 1 and 5 and then a role to link!");
+            event.replyError("Too few arguments! Try specifying a rating between 1 and 5, and a role to pair with it!");
             return;
         }
 

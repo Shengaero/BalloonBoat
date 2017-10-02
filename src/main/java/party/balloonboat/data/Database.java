@@ -97,9 +97,17 @@ public class Database
 
         try {
             int i = 1;
-            for(User user : calcTable.getTop10(message.getJDA()))
+            for(User user : calcTable.getTop20(message.getJDA()))
             {
-                b.appendDescription("`"+i+"` - ").appendDescription(user.getAsMention()).appendDescription("\n");
+                b.appendDescription("`"+i+"` - ").appendDescription(user.getAsMention());
+
+                for(short balloons = 1; balloons <= getUserRating(user); balloons++)
+                {
+                    b.appendDescription(" ").appendDescription(Bot.Config.BOT_EMOJI);
+                }
+
+                b.appendDescription("\n");
+
                 i++;
             }
         } catch(SQLException e) {
@@ -112,7 +120,7 @@ public class Database
 
         b.setColor(message.getGuild().getSelfMember().getColor());
         b.setFooter("Last Updated", null);
-        b.setTimestamp(message.getEditedTime().plus(5, ChronoUnit.MINUTES));
+        b.setTimestamp(message.getEditedTime().plus(delay, ChronoUnit.MINUTES));
 
         // Update again later
         message.editMessage(b.build()).queueAfter(
@@ -178,7 +186,7 @@ public class Database
     public short getUserRating(long userId)
     {
         try {
-            return calcTable.getUserRating(userId, true);
+            return calcTable.getUserRating(userId, false);
         } catch(SQLException e) {
             LOG.warn("Encountered an SQLException: ",e);
             return -1;
@@ -201,10 +209,17 @@ public class Database
             // Sends rating to the database
             ratings.setRating(user.getIdLong(), target.getIdLong(), rating);
 
-            webhook.send(String.format(WEBHOOK_FORMAT, Bot.Config.SUCCESS_EMOJI,
+            StringBuilder msg = new StringBuilder(String.format(WEBHOOK_FORMAT, Bot.Config.SUCCESS_EMOJI,
                     user.getName(), user.getDiscriminator(), user.getIdLong(),
                     target.getName(), target.getDiscriminator(), target.getIdLong(),
                     rating));
+
+            for(short balloons = 1; balloons <= getUserRating(user); balloons++)
+            {
+                msg.append(" " + Bot.Config.BOT_EMOJI);
+            }
+
+            webhook.send(msg.toString());
         } catch(SQLException e) {
             LOG.warn("Encountered an SQLException: ",e);
         }
@@ -278,6 +293,47 @@ public class Database
         } catch(SQLException e) {
             LOG.warn("Encountered an SQLException: ",e);
         }
+    }
+
+    public double getGlobalAverage()
+    {
+        double returns = 0;
+        try(Statement statement = connection.createStatement())
+        {
+            try(ResultSet results = statement.executeQuery("SELECT TRUE_RATING FROM CALCULATIONS"))
+            {
+                int total = 0;
+                while(results.next())
+                {
+                    total++;
+                    returns += results.getDouble("TRUE_RATING");
+                }
+                returns /= total;
+            }
+        } catch(SQLException e) {
+            LOG.warn("Encountered an SQLException: ",e);
+            returns = -1;
+        }
+        return returns;
+    }
+
+    public long getGlobalTotalRatings()
+    {
+        long returns = 0;
+        try(Statement statement = connection.createStatement())
+        {
+
+            try(ResultSet results = statement.executeQuery("SELECT * FROM RATINGS"))
+            {
+                while(results.next())
+                    returns += 1L;
+            }
+        } catch(SQLException e) {
+            LOG.warn("Encountered an SQLException: ",e);
+            returns = -1;
+        }
+
+        return returns;
     }
 
     @SuppressWarnings("unused")

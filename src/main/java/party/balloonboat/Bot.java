@@ -20,6 +20,7 @@ import com.jagrosh.jdautilities.commandclient.CommandClientBuilder;
 import com.jagrosh.jdautilities.waiter.EventWaiter;
 import net.dv8tion.jda.core.AccountType;
 import net.dv8tion.jda.core.JDABuilder;
+import net.dv8tion.jda.core.Permission;
 import net.dv8tion.jda.core.entities.Role;
 import net.dv8tion.jda.core.events.ReadyEvent;
 import net.dv8tion.jda.core.events.ShutdownEvent;
@@ -34,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import party.balloonboat.commands.*;
 import party.balloonboat.data.Database;
 import javax.security.auth.login.LoginException;
+import java.awt.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -79,11 +81,14 @@ public class Bot extends ListenerAdapter
         CommandClientBuilder builder = new CommandClientBuilder();
 
         builder.addCommands(
+                new AboutCommand(database, Config.PERMISSIONS),
+                new FromCommand(database, waiter),
                 new LinkRoleCommand(database),
                 new PingCommand(),
+                new RankCommand(database),
                 new RateCommand(database),
-                new RatingCommand(database, waiter),
-                new RatingsCommand(database, waiter),
+                new ToCommand(database, waiter),
+
                 new EvalCommand(database),
                 new ShutdownCommand(database)
         );
@@ -110,13 +115,6 @@ public class Bot extends ListenerAdapter
         // Set Discord Bots List Key
         if(config.getDiscordBotsListKey() != null)
             builder.setDiscordBotListKey(config.getDiscordBotsListKey());
-
-        builder.setClientLogger((isError, msg) -> {
-            if(isError)
-                LOG.error(msg);
-            else
-                LOG.info(msg);
-        });
 
         CommandClient client = builder.build();
 
@@ -175,10 +173,20 @@ public class Bot extends ListenerAdapter
         public static final String GAME = "Type b-help";
         public static final String SUCCESS_EMOJI = "<:BalloonSuccess:359189166149599233>";
         public static final String WARNING_EMOJI = "<:BalloonWarning:359189166531018762>";
-        public static final String ERROR_EMOJI = "<:BalloonError:359189166439006209> ";
+        public static final String ERROR_EMOJI = "<:BalloonError:359189166439006209>";
+        public static final String BOT_EMOJI = "<:BalloonBoat:359188538392313878>";
         public static final String HUB_SERVER_INVITE = "https://discord.gg/A2XmF9a";
         public static final long TOP_USERS_CHAN_ID = 359187922928402444L;
         public static final long TOP_USERS_MSG_ID = 362750549688320000L;
+
+        public static final Permission[] PERMISSIONS = new Permission[] {
+                Permission.MANAGE_ROLES,
+                Permission.MESSAGE_EMBED_LINKS,
+                Permission.MESSAGE_ADD_REACTION,
+                Permission.MESSAGE_MANAGE
+        };
+
+        public static final Color BLURPLE_COLOR = Color.decode("#7289DA");
 
         // Non-Static Configurations
         private final long jagroshId;

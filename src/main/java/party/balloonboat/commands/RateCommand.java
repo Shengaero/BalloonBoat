@@ -35,7 +35,7 @@ public class RateCommand extends DatabaseCommand
         this.aliases = new String[]{"R"};
         this.arguments = "[1-5] [User]";
         this.help = "Rates another user 1-5.";
-        this.cooldown = 5;
+        this.cooldown = 3;
         this.cooldownScope = CooldownScope.USER;
         this.guildOnly = true;
         this.usesTopicTags = true;

@@ -30,11 +30,11 @@ plugins {
 }
 
 group 'party.balloonboat'
-version '0.1'
+version '0.2'
 
 mainClassName = "${group}.Bot"
 
-def jda = '3.3.1_281'
+def jda = '3.3.1_284'
 def jda_utils = 'development-SNAPSHOT'
 
 sourceCompatibility = 1.8
@@ -57,9 +57,7 @@ dependencies {
     // JDA
     compile "net.dv8tion:JDA:$jda"
     compile "com.github.jagrosh:JDA-Utilities:$jda_utils"
-    compile "org.slf4j:slf4j-api:1.7.25"
     compile 'ch.qos.logback:logback-classic:1.2.3'
-
 
     // h2
     compile 'com.h2database:h2:1.4.196'

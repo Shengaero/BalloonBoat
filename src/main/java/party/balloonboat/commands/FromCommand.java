@@ -29,16 +29,16 @@ import java.util.List;
 /**
  * @author Kaidan Gustave
  */
-public class RatingsCommand extends DatabaseCommand
+public class FromCommand extends DatabaseCommand
 {
     private final PaginatorBuilder pBuilder;
 
-    public RatingsCommand(Database database, EventWaiter waiter)
+    public FromCommand(Database database, EventWaiter waiter)
     {
         super(database);
-        this.name = "Ratings";
+        this.name = "From";
         this.arguments = "<User>";
-        this.help = "Gets a list of ratings by a user.";
+        this.help = "Gets a list of ratings from a user.";
         this.cooldown = 10;
         this.cooldownScope = CooldownScope.USER;
         this.botPermissions = new Permission[]{
@@ -81,11 +81,11 @@ public class RatingsCommand extends DatabaseCommand
         event.replyWarning("Getting Ratings...", message -> {
 
             pBuilder.clearItems();
-            pBuilder.setText((page, total) ->
-                    String.format("Ratings made by %#s | Page %d/%d", member.getUser(), page, total));
+            pBuilder.setText((page, total) -> String.format("Ratings made by **%s**#%s | Page %d/%d",
+                    member.getUser().getName(), member.getUser().getDiscriminator(), page, total));
 
-            database.getRatingsByUser(member.getUser(), event.getJDA())
-                    .forEach((user, rating) -> pBuilder.addItems(String.format("%#s %d", user, rating)));
+            database.getRatingsByUser(member.getUser(), event.getJDA()).forEach((user, rating) ->
+                    pBuilder.addItems(String.format("**%s**#%s %d", user.getName(), user.getDiscriminator(), rating)));
 
             if(member.getColor() != null)
                 pBuilder.setColor(member.getColor());
