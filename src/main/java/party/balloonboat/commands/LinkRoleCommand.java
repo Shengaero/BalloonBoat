@@ -54,7 +54,7 @@ public class LinkRoleCommand extends DatabaseCommand
             EmbedBuilder b = new EmbedBuilder();
 
             boolean hasNone = true;
-            for(short i = 5; i > 0; i++)
+            for(short i = 5; i > 0; i--)
             {
                 Role role = database.getRatingRole(event.getGuild(), i);
                 if(role != null)

@@ -27,6 +27,7 @@ import party.balloonboat.Bot;
 import javax.annotation.Nullable;
 import java.sql.*;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -137,14 +138,21 @@ public class Database
         jda.getGuilds().forEach(guild -> {
             for(short rating = 1; rating <= 5; rating++)
             {
-                Role role = getRatingRole(guild, rating);
+                short r = rating;
+                Role role = getRatingRole(guild, r);
 
                 // There is a role
                 if(role != null)
                 {
-                    getMembersByRating(rating, guild).forEach(member -> {
-                        guild.getController().addRolesToMember(member, role).queue(v -> {}, v -> {});
-                    });
+                    guild.getMembersWithRoles(role).stream().filter(member -> {
+                        return getUserRating(member.getUser()) != r; // Has a role that doesn't represent their rank
+                    }).forEach(member ->
+                            guild.getController().removeRolesFromMember(member, role).queue(v -> {}, v -> {}));
+
+                    getMembersByRating(r, guild).stream().filter(member -> {
+                        return !member.getRoles().contains(role); // Doesn't have the proper role
+                    }).forEach(member ->
+                            guild.getController().addRolesToMember(member, role).queue(v -> {}, v -> {}));
                 }
             }
         });
@@ -274,6 +282,18 @@ public class Database
         } catch(SQLException e) {
             LOG.warn("Encountered an SQLException: ",e);
         }
+    }
+
+    public List<Role> getAllRatingRoles(Guild guild)
+    {
+        List<Role> list = new ArrayList<>();
+        for(short i = 1; i <= 5; i++)
+        {
+            Role role = getRatingRole(guild, i);
+            if(role != null)
+                list.add(role);
+        }
+        return list;
     }
 
     public boolean isUsingDMChanges(User user, boolean isUsing)
