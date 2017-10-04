@@ -15,7 +15,6 @@
  */
 package party.balloonboat.data;
 
-import javax.annotation.Nullable;
 import java.sql.*;
 
 /**
@@ -32,38 +31,10 @@ public abstract class TableHandler
         this.table = table;
     }
 
-    @Nullable
-    @SuppressWarnings("unchecked")
-    public  <T> T select(String column, String... where) throws SQLException
-    {
-        T returns = null;
-        try (Statement statement = connection.createStatement())
-        {
-            try (ResultSet results = statement.executeQuery("SELECT "+column+" FROM "+table.name()+" "+mergeToString(where)))
-            {
-                if(results.next())
-                    returns = (T) results.getObject(column);
-            }
-        }
-        return returns;
-    }
-
     @SuppressWarnings("unused")
     // This is really only necessary if for some reason we'd need to create an individual table
     public final void create() throws SQLException
     {
         table.createUsing(connection);
-    }
-
-    private static String mergeToString(String... params)
-    {
-        StringBuilder builder = new StringBuilder("WHERE ");
-        for(int i = 0; i<params.length; i++)
-        {
-            builder.append(params[i]);
-            if(i < params.length-1)
-                builder.append(" AND ");
-        }
-        return builder.toString();
     }
 }

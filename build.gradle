@@ -30,11 +30,11 @@ plugins {
 }
 
 group 'party.balloonboat'
-version '0.2'
+version '0.3'
 
 mainClassName = "${group}.Bot"
 
-def jda = '3.3.1_284'
+def jda = '6d5f0cc'
 def jda_utils = 'development-SNAPSHOT'
 
 sourceCompatibility = 1.8
@@ -55,13 +55,16 @@ repositories {
 
 dependencies {
     // JDA
-    compile "net.dv8tion:JDA:$jda"
+    compile "com.github.DV8FromTheWorld:JDA:$jda"
     compile "com.github.jagrosh:JDA-Utilities:$jda_utils"
+
+    // logback
     compile 'ch.qos.logback:logback-classic:1.2.3'
 
     // h2
     compile 'com.h2database:h2:1.4.196'
 
+    // junit
     testCompile group: 'junit', name: 'junit', version: '4.12'
 }
 

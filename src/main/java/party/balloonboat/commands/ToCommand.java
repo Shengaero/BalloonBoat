@@ -88,7 +88,7 @@ public class ToCommand extends DatabaseCommand
             pBuilder.setText((page, total) -> String.format("Ratings of **%s**#%s | Page %d/%d", member.getUser().getName(),
                     member.getUser().getDiscriminator(), page, total));
 
-            database.getUsersWhoRated(member.getUser()).forEach((l, s) -> {
+            database.getRatingsTo(member.getUser()).forEach((l, s) -> {
                 User user = event.getJDA().getUserById(l);
                 if(user == null)
                     pBuilder.addItems("UNKNOWN (ID: "+l+") - "+s);

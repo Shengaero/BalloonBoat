@@ -21,6 +21,7 @@ import com.jagrosh.jdautilities.utils.FinderUtil;
 import com.jagrosh.jdautilities.waiter.EventWaiter;
 import net.dv8tion.jda.core.Permission;
 import net.dv8tion.jda.core.entities.Member;
+import net.dv8tion.jda.core.entities.User;
 import party.balloonboat.data.Database;
 import party.balloonboat.utils.FormatUtils;
 
@@ -84,8 +85,17 @@ public class FromCommand extends DatabaseCommand
             pBuilder.setText((page, total) -> String.format("Ratings made by **%s**#%s | Page %d/%d",
                     member.getUser().getName(), member.getUser().getDiscriminator(), page, total));
 
-            database.getRatingsByUser(member.getUser(), event.getJDA()).forEach((user, rating) ->
-                    pBuilder.addItems(String.format("**%s**#%s %d", user.getName(), user.getDiscriminator(), rating)));
+            database.getRatingsFrom(member.getUser()).forEach((userId, rating) -> {
+                final User user;
+                if(event.getJDA().getShardInfo() != null)
+                    user = event.getJDA().asBot().getShardManager().getUserById(userId);
+                else
+                    user = event.getJDA().getUserById(userId);
+                if(user != null)
+                    pBuilder.addItems(String.format("**%s**#%s %d", user.getName(), user.getDiscriminator(), rating));
+                else
+                    pBuilder.addItems(String.format("**Unknown** (ID: %d) %d", userId, rating));
+            });
 
             if(member.getColor() != null)
                 pBuilder.setColor(member.getColor());

@@ -18,6 +18,7 @@ package party.balloonboat.data;
 import net.dv8tion.jda.core.EmbedBuilder;
 import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.entities.*;
+import net.dv8tion.jda.core.utils.cache.SnowflakeCacheView;
 import net.dv8tion.jda.webhook.WebhookClient;
 import net.dv8tion.jda.webhook.WebhookClientBuilder;
 import org.slf4j.Logger;
@@ -27,7 +28,6 @@ import party.balloonboat.Bot;
 import javax.annotation.Nullable;
 import java.sql.*;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -42,8 +42,8 @@ import java.util.function.Consumer;
 @SuppressWarnings("unused")
 public class Database
 {
-    private static final Logger LOG = LoggerFactory.getLogger(Database.class);
-    private static final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+    public static final Logger LOG = LoggerFactory.getLogger(Database.class);
+    private static final ScheduledExecutorService EXECUTOR = Executors.newSingleThreadScheduledExecutor();
     private static final String WEBHOOK_FORMAT = "%s **%s**#%s (ID: %d) rated **%s**#%s (ID: %d) as `%d`";
 
     private final Connection connection;
@@ -57,7 +57,6 @@ public class Database
     public Database(String url, String user, String pass, long webhookId, String webhookToken)
             throws SQLException, ClassNotFoundException, IllegalAccessException, InstantiationException
     {
-
         Class.forName("org.h2.Driver").newInstance();
 
         connection = DriverManager.getConnection(url, user, pass);
@@ -67,26 +66,20 @@ public class Database
         guildSettings = new GuildSettingsTable(connection);
         privateSettings = new PrivateSettingsTable(connection);
 
-        webhook = new WebhookClientBuilder(webhookId, webhookToken).setExecutorService(executor).build();
+        webhook = new WebhookClientBuilder(webhookId, webhookToken).setExecutorService(EXECUTOR).build();
     }
 
-    public boolean init()
+    public void init() throws SQLException
     {
         for(Table table : Table.values())
         {
-            try {
-                try (ResultSet results = connection.getMetaData().getTables(null, null, table.name(), null))
-                {
-                    // Only create if there is no table
-                    if(!results.next())
-                        table.createUsing(connection);
-                }
-            } catch(SQLException e) {
-                LOG.warn("Failed to create table "+table.name(),e);
-                return false;
+            try (ResultSet results = connection.getMetaData().getTables(null, null, table.name(), null))
+            {
+                // Only create if there is no table
+                if(!results.next())
+                    table.createUsing(connection);
             }
         }
-        return true;
     }
 
     // Only fire this once!
@@ -98,14 +91,17 @@ public class Database
 
         try {
             int i = 1;
-            for(User user : calcTable.getTop20(message.getJDA()))
+            for(Long userId : calcTable.getTop20())
             {
-                b.appendDescription("`"+i+"` - ").appendDescription(user.getAsMention());
+                b.appendDescription("`"+i+"` - ");
+                Member member = message.getGuild().getMemberById(userId);
+                if(member != null)
+                    b.appendDescription(member.getAsMention());
+                else
+                    b.appendDescription("<@"+userId+">");
 
-                for(short balloons = 1; balloons <= getUserRating(user); balloons++)
-                {
+                for(short balloons = 1; balloons <= getUserRating(userId); balloons++)
                     b.appendDescription(" ").appendDescription(Bot.Config.BOT_EMOJI);
-                }
 
                 b.appendDescription("\n");
 
@@ -115,7 +111,7 @@ public class Database
             LOG.warn("Encountered an SQLException: ",e);
 
             // Retry again later
-            executor.schedule(() -> updateTopRatings(message,delay,unit), delay, unit);
+            EXECUTOR.schedule(() -> updateTopRatings(message,delay,unit), delay, unit);
             return;
         }
 
@@ -128,14 +124,20 @@ public class Database
                 delay, unit,
                 msg -> updateTopRatings(message, delay, unit),
                 err -> updateTopRatings(message, delay, unit),
-                executor
+                EXECUTOR
         );
     }
 
     // Only fire this once!
     public void updateRoles(JDA jda, long delay, TimeUnit unit)
     {
-        jda.getGuilds().forEach(guild -> {
+        final SnowflakeCacheView<Guild> guilds;
+        if(jda.getShardInfo() != null)
+            guilds = jda.asBot().getShardManager().getGuildCache();
+        else
+            guilds = jda.getGuildCache();
+
+        guilds.forEach(guild -> {
             for(short rating = 1; rating <= 5; rating++)
             {
                 short r = rating;
@@ -157,14 +159,13 @@ public class Database
             }
         });
 
-        executor.schedule(() -> updateRoles(jda, delay, unit), delay, unit);
+        EXECUTOR.schedule(() -> updateRoles(jda, delay, unit), delay, unit);
     }
 
     public boolean ratingEquals(User user, User target, short rating)
     {
         try {
-            return ratings.hasRated(user.getIdLong(), target.getIdLong())
-                    && getRating(user, target) == rating;
+            return ratings.hasRated(user.getIdLong(), target.getIdLong()) && getRating(user, target) == rating;
         } catch(SQLException e) {
             LOG.warn("Encountered an SQLException: ",e);
             return false;
@@ -201,16 +202,6 @@ public class Database
         }
     }
 
-    public Map<Long, Short> getUsersWhoRated(User user)
-    {
-        try {
-            return ratings.getAllUsersRating(user.getIdLong());
-        } catch(SQLException e) {
-            LOG.warn("Encountered an SQLException: ",e);
-            return Collections.emptyMap();
-        }
-    }
-
     public void setRating(User user, User target, short rating)
     {
         try {
@@ -243,15 +234,30 @@ public class Database
         }
     }
 
-    public Map<User, Short> getRatingsByUser(User user, JDA jda)
+    public Map<Long, Short> getRatingsTo(User user)
     {
-        return getRatingsByUser(user.getIdLong(), jda);
+        return getRatingsTo(user.getIdLong());
     }
 
-    public Map<User, Short> getRatingsByUser(long userId, JDA jda)
+    public Map<Long, Short> getRatingsTo(long userId)
     {
         try {
-            return ratings.getRatingsByUser(userId, jda);
+            return ratings.getAllUsersRating(userId);
+        } catch(SQLException e) {
+            LOG.warn("Encountered an SQLException: ",e);
+            return Collections.emptyMap();
+        }
+    }
+
+    public Map<Long, Short> getRatingsFrom(User user)
+    {
+        return getRatingsFrom(user.getIdLong());
+    }
+
+    public Map<Long, Short> getRatingsFrom(long userId)
+    {
+        try {
+            return ratings.getRatingsByUser(userId);
         } catch(SQLException e) {
             LOG.warn("Encountered an SQLException: ",e);
             return Collections.emptyMap();
@@ -261,7 +267,7 @@ public class Database
     @Nullable
     public Role getRatingRole(Guild guild, short number)
     {
-        Role role;
+        final Role role;
         try {
             long roleId = guildSettings.getRoleId(guild, number);
             if(roleId == -1L)
@@ -270,7 +276,7 @@ public class Database
                 role = guild.getRoleById(roleId);
         } catch(SQLException e) {
             LOG.warn("Encountered an SQLException: ",e);
-            role = null;
+            return null;
         }
         return role;
     }
@@ -284,19 +290,23 @@ public class Database
         }
     }
 
-    public List<Role> getAllRatingRoles(Guild guild)
+
+    // IMPORTANT!!
+    // This has THREE return cases:
+    // if this returns -1, the role has not been linked to a rating.
+    // if this returns 0, there was an SQL Error, and no further action should be taken.
+    // if this returns 1, 2, 3, 4, or 5, the role has been linked to a rating of the returns.
+    public short getRoleRating(Role role)
     {
-        List<Role> list = new ArrayList<>();
-        for(short i = 1; i <= 5; i++)
-        {
-            Role role = getRatingRole(guild, i);
-            if(role != null)
-                list.add(role);
+        try {
+            return guildSettings.getRoleRating(role);
+        } catch(SQLException e) {
+            LOG.warn("Encountered an SQLException: ",e);
+            return 0;
         }
-        return list;
     }
 
-    public boolean isUsingDMChanges(User user, boolean isUsing)
+    public boolean isUsingDMChanges(User user)
     {
         try {
             return privateSettings.isUsingDMChanges(user);
@@ -377,6 +387,7 @@ public class Database
         }
     }
 
+    @SuppressWarnings("unused")
     public long getPing()
     {
         long start = System.currentTimeMillis();
@@ -395,7 +406,7 @@ public class Database
         // Close webhook
         webhook.close();
 
-        executor.shutdownNow();
+        EXECUTOR.shutdownNow();
 
         LOG.info("Attempting to close JDBC connection...");
         try {

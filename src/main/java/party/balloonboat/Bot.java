@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Kaidan Gustave
+ * Copyright 2017 John Grosh & Kaidan Gustave
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 package party.balloonboat;
 
-import com.jagrosh.jdautilities.commandclient.CommandClient;
 import com.jagrosh.jdautilities.commandclient.CommandClientBuilder;
 import com.jagrosh.jdautilities.waiter.EventWaiter;
 import net.dv8tion.jda.core.AccountType;
@@ -76,13 +75,20 @@ public class Bot extends ListenerAdapter
                 config.getWebhookToken()
         );
 
+        database.init();
+
+        // Event Waiter
         EventWaiter waiter = new EventWaiter();
 
         CommandClientBuilder builder = new CommandClientBuilder();
 
+        // No default help
+        builder.useHelpBuilder(false);
+
         builder.addCommands(
                 new AboutCommand(database, Config.PERMISSIONS),
                 new FromCommand(database, waiter),
+                new HelpCommand(),
                 new LinkRoleCommand(database),
                 new PingCommand(),
                 new RankCommand(database),
@@ -90,6 +96,7 @@ public class Bot extends ListenerAdapter
                 new ToCommand(database, waiter),
 
                 new EvalCommand(database),
+                new ModeCommand(),
                 new ShutdownCommand(database)
         );
 
@@ -99,10 +106,7 @@ public class Bot extends ListenerAdapter
         builder.setOwnerId(config.getJagroshId());    // jagrosh
         builder.setCoOwnerIds(config.getMonitorId()); // monitor
 
-        builder.setEmojis(
-                Config.SUCCESS_EMOJI,
-                Config.WARNING_EMOJI,
-                Config.ERROR_EMOJI);
+        builder.setEmojis(Config.SUCCESS_EMOJI, Config.WARNING_EMOJI, Config.ERROR_EMOJI);
 
         // Set Discord Bots Key
         if(config.getDiscordBotsKey() != null)
@@ -116,11 +120,9 @@ public class Bot extends ListenerAdapter
         if(config.getDiscordBotsListKey() != null)
             builder.setDiscordBotListKey(config.getDiscordBotsListKey());
 
-        CommandClient client = builder.build();
-
         new JDABuilder(AccountType.BOT)
                 .setToken(config.getToken())
-                .addEventListener(client, waiter, this)
+                .addEventListener(builder.build(), waiter, this)
                 .buildAsync();
     }
 
@@ -134,7 +136,7 @@ public class Bot extends ListenerAdapter
                 5, TimeUnit.MINUTES
         );
 
-        database.updateRoles(event.getJDA(), 30, TimeUnit.MINUTES);
+        database.updateRoles(event.getJDA(), 10, TimeUnit.MINUTES);
     }
 
     @Override

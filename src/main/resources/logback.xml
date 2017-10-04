@@ -14,19 +14,19 @@
   ~ limitations under the License.
   -->
 <configuration>
-
     <!-- Conversions for logging. -->
-    <conversionRule conversionWord="levelHighlight"
-                    converterClass="party.balloonboat.logging.LevelHighlighter"/>
+    <conversionRule conversionWord="simpleHL" converterClass="party.balloonboat.logging.SimpleHL"/>
 
-    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <appender name="Simple" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>[%d{HH:mm:ss}] [%levelHighlight(%level)] [%logger{0}]: %msg%n</pattern>
+            <!-- Pattern -->
+            <pattern>
+                [%d{HH:mm:ss}] [%simpleHL(%level)] [%logger{0}]: %simpleHL(%msg%n)
+            </pattern>
         </encoder>
     </appender>
 
-    <root level="info">
-        <appender-ref ref="STDOUT" />
+    <root level="INFO">
+        <appender-ref ref="Simple"/>
     </root>
-
 </configuration>

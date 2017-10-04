@@ -15,10 +15,8 @@
  */
 package party.balloonboat.data;
 
-import net.dv8tion.jda.core.JDA;
 import net.dv8tion.jda.core.entities.Guild;
 import net.dv8tion.jda.core.entities.Member;
-import net.dv8tion.jda.core.entities.User;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -30,7 +28,6 @@ import java.util.List;
 /**
  * @author Kaidan Gustave
  */
-@SuppressWarnings("unused")
 public class CalculationsTable extends TableHandler
 {
     public CalculationsTable(Connection connection)
@@ -64,9 +61,9 @@ public class CalculationsTable extends TableHandler
         }
     }
 
-    public List<User> getTop20(JDA jda) throws SQLException
+    public List<Long> getTop20() throws SQLException
     {
-        List<User> users = new ArrayList<>();
+        List<Long> users = new ArrayList<>();
         try (Statement statement = connection.createStatement())
         {
             try (ResultSet results = statement.executeQuery(
@@ -76,7 +73,7 @@ public class CalculationsTable extends TableHandler
                 int i = 0;
                 while(results.next() && i < 20)
                 {
-                    users.add(jda.retrieveUserById(results.getLong("USER_ID")).complete());
+                    users.add(results.getLong("USER_ID"));
                     i++;
                 }
             }

@@ -36,6 +36,7 @@ public class EvalCommand extends DatabaseCommand
         this.name = "Eval";
         this.aliases = new String[]{"Evaluate"};
         this.arguments = "<Script>";
+        this.help = "Evaluates script using Nashorn.";
         this.guildOnly = false;
         this.ownerCommand = true;
         this.usesTopicTags = false;
@@ -50,6 +51,7 @@ public class EvalCommand extends DatabaseCommand
         engine.put("channel", event.getChannel());
         engine.put("author", event.getAuthor());
         engine.put("selfUser", event.getSelfUser());
+        engine.put("client", event.getClient());
         engine.put("database", database);
 
         if(event.isFromType(ChannelType.TEXT))

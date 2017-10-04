@@ -53,9 +53,16 @@ public class PrivateSettingsTable extends TableHandler
 
     public boolean isUsingDMChanges(User user) throws SQLException
     {
-        Boolean isUsing = select("DM_CHANGES", "USER_ID = "+user.getIdLong());
-
-        return isUsing == null ? false : isUsing;
+        final boolean returns;
+        try (Statement statement = connection.createStatement())
+        {
+            try (ResultSet results = statement.executeQuery("SELECT DM_CHANGES FROM "+table.name()+" " +
+                                                            "WHERE USER_ID = "+user.getIdLong()))
+            {
+                returns = results.next() && results.getBoolean("DM_CHANGES");
+            }
+        }
+        return returns;
     }
 
     public void setUsingDMChanges(User user, boolean isUsing) throws SQLException

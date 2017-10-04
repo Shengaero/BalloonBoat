@@ -57,13 +57,48 @@ public class GuildSettingsTable extends TableHandler
         return returns;
     }
 
+    public short getRoleRating(Role role) throws SQLException
+    {
+        short returns = -1;
+        try (Statement statement = connection.createStatement())
+        {
+            try (ResultSet set = statement.executeQuery("SELECT * FROM "+table.name()+" " +
+                                                        "WHERE GUILD_ID = "+role.getGuild().getIdLong()))
+            {
+                if(set.next())
+                {
+                    for(short i = 1; i <= 5; i++)
+                    {
+                        long forRole = set.getLong("ROLE_"+i);
+                        if(forRole != 0L && forRole == role.getIdLong())
+                        {
+                            returns = i;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return returns;
+    }
+
     public long getRoleId(Guild guild, short number) throws SQLException
     {
-        Long l = select("ROLE_"+number, "GUILD_ID = "+guild.getIdLong());
-
+        final long returns;
+        try (Statement statement = connection.createStatement())
+        {
+            try (ResultSet set = statement.executeQuery("SELECT ROLE_"+number+" FROM "+table.name()+" " +
+                                                        "WHERE GUILD_ID = "+guild.getIdLong()))
+            {
+                if(set.next())
+                    returns = set.getLong("ROLE_"+number);
+                else
+                    returns = -1;
+            }
+        }
         // returns -1 if the query provided null OR if the query pointed to an unset
         // role ID (unset role IDs are saved as 0L)
-        return l == null || l == 0L ? -1L : l;
+        return returns;
     }
 
     public void setRole(Role role, short number) throws SQLException

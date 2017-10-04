@@ -15,8 +15,6 @@
  */
 package party.balloonboat.data;
 
-import net.dv8tion.jda.core.JDA;
-import net.dv8tion.jda.core.entities.User;
 import party.balloonboat.utils.AlgorithmUtils;
 
 import java.sql.Connection;
@@ -27,6 +25,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static party.balloonboat.data.Database.*;
 
 /**
  * @author Kaidan Gustave
@@ -54,9 +54,9 @@ public class RatingsTable extends TableHandler
         final boolean returns;
         try (Statement statement = connection.createStatement())
         {
-            try (ResultSet set = statement.executeQuery(
-                    "SELECT * FROM RATINGS WHERE USER_ID = "+userId+" AND TARGET_ID = "+targetId
-            ))
+            try (ResultSet set = statement.executeQuery("SELECT * FROM RATINGS " +
+                                                        "WHERE USER_ID = "+userId+" " +
+                                                        "AND TARGET_ID = "+targetId))
             {
                 returns = set.next();
             }
@@ -69,11 +69,9 @@ public class RatingsTable extends TableHandler
         final short returns;
         try (Statement statement = connection.createStatement())
         {
-            try (ResultSet set = statement.executeQuery(
-                    "SELECT RATING FROM RATINGS " +
-                    "WHERE USER_ID = "+userId+" " +
-                    "AND TARGET_ID = "+targetId
-            ))
+            try (ResultSet set = statement.executeQuery("SELECT RATING FROM RATINGS " +
+                                                        "WHERE USER_ID = "+userId+" " +
+                                                        "AND TARGET_ID = "+targetId))
             {
                 set.next();
                 returns = set.getShort("RATING");
@@ -82,20 +80,17 @@ public class RatingsTable extends TableHandler
         return returns;
     }
 
-    public Map<User, Short> getRatingsByUser(long userId, JDA jda) throws SQLException
+    public Map<Long, Short> getRatingsByUser(long userId) throws SQLException
     {
-        Map<User, Short> map = new HashMap<>();
+        Map<Long, Short> map = new HashMap<>();
         try (Statement statement = connection.createStatement())
         {
-            try (ResultSet results = statement.executeQuery(
-                    "SELECT TARGET_ID, RATING FROM RATINGS WHERE USER_ID = "+userId
-            ))
+            try (ResultSet results = statement.executeQuery("SELECT TARGET_ID, RATING FROM RATINGS " +
+                                                            "WHERE USER_ID = "+userId))
             {
                 while(results.next())
                 {
-                    User user = jda.getUserById(results.getLong("TARGET_ID"));
-                    if(user != null)
-                        map.put(user, results.getShort("RATING"));
+                    map.put(results.getLong("TARGET_ID"), results.getShort("RATING"));
                 }
             }
         }
@@ -110,10 +105,11 @@ public class RatingsTable extends TableHandler
             try(Statement statement = connection.createStatement())
             {
                 // Update USER_RATING and RATING simultaneously.
-                statement.execute(
-                        "UPDATE RATINGS SET USER_RATING = "+userRating+", RATING = "+rating+" WHERE" +
-                        " USER_ID = "+userId+" AND TARGET_ID = "+targetId
-                );
+                statement.execute("UPDATE RATINGS " +
+                                  "SET USER_RATING = "+userRating+"," +
+                                      "RATING = "+rating+" " +
+                                  "WHERE USER_ID = "+userId+" " +
+                                  "AND TARGET_ID = "+targetId);
             }
         }
         else
@@ -121,10 +117,8 @@ public class RatingsTable extends TableHandler
             try (Statement statement = connection.createStatement())
             {
                 // Insertion statement
-                statement.execute(
-                        "INSERT INTO RATINGS (USER_RATING, USER_ID, TARGET_ID, RATING) VALUES" +
-                        "("+userRating+","+userId+","+targetId+","+rating+")"
-                );
+                statement.execute("INSERT INTO RATINGS(USER_RATING, USER_ID, TARGET_ID, RATING) " +
+                                  "VALUES ("+userRating+","+userId+","+targetId+","+rating+")");
             }
         }
 
@@ -140,20 +134,23 @@ public class RatingsTable extends TableHandler
         for(short i = 5; i >= 1; i--)
             list.add(getAllTargetRatingsForRank(i, userId));
 
-        short userRatingBefore = calcTable.getUserRating(userId, true);
+        short before = calcTable.getUserRating(userId, true);
         double trueRating = AlgorithmUtils.calculateRating(list);
-        short userRatingAfter = calcTable.setAndReturnUserRating(userId, trueRating);
+        short after = calcTable.setAndReturnUserRating(userId, trueRating);
+
+        LOG.debug("Calculated rating for user ID "+trueRating);
 
         // We reevaluate the ratings of the target if and only if their effective rating
         // has changed by now.
         // While this could recurse several times potentially, it will most certainly not
         // go forever (please don't let me be wrong...)
-        if(userRatingAfter != userRatingBefore)
+        if(after != before)
         {
+            LOG.debug("Reevaluating rating for user ID "+userId+" ("+before+" -> "+after+")");
             for(long targetId : getAllTargetsRated(userId))
             {
                 // RECURSION //
-                setRating(userRatingAfter, userId, targetId, getRating(userId, targetId));
+                setRating(after, userId, targetId, getRating(userId, targetId));
             }
         }
     }
@@ -167,9 +164,10 @@ public class RatingsTable extends TableHandler
     public Map<Long, Short> getAllUsersRating(long userId) throws SQLException
     {
         Map<Long, Short> map = new HashMap<>();
-        try (Statement statement = connection.createStatement())
+        try(Statement statement = connection.createStatement())
         {
-            try (ResultSet results = statement.executeQuery("SELECT * FROM "+table.name()+" WHERE TARGET_ID = "+userId))
+            try(ResultSet results = statement.executeQuery("SELECT * FROM RATINGS " +
+                                                            "WHERE TARGET_ID = "+userId))
             {
                 while(results.next())
                 {
@@ -183,13 +181,11 @@ public class RatingsTable extends TableHandler
     public Long[] getAllTargetsRated(long userId) throws SQLException
     {
         final Long[] returns;
-        try (Statement statement = connection.createStatement(
-                ResultSet.TYPE_SCROLL_INSENSITIVE,
-                ResultSet.CONCUR_READ_ONLY))
+        try(Statement statement = connection.createStatement(
+                ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY))
         {
-            try(ResultSet set = statement.executeQuery(
-                    "SELECT TARGET_ID FROM RATINGS WHERE USER_ID = "+userId
-            ))
+            try(ResultSet set = statement.executeQuery("SELECT TARGET_ID FROM RATINGS " +
+                                                       "WHERE USER_ID = "+userId))
             {
                 if(set.last())
                     returns = new Long[set.getRow()];
@@ -210,15 +206,12 @@ public class RatingsTable extends TableHandler
     {
         final Short[] returns;
         try (Statement statement = connection.createStatement(
-                ResultSet.TYPE_SCROLL_INSENSITIVE,
-                ResultSet.CONCUR_READ_ONLY))
+                ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY))
         {
-            try (ResultSet set = statement.executeQuery(
-                    "SELECT RATING FROM RATINGS " +
-                    "WHERE USER_RATING = "+rank+" " +
-                    "AND NOT USER_ID = "+targetId+" " +
-                    "AND TARGET_ID = "+targetId
-            ))
+            try (ResultSet set = statement.executeQuery("SELECT RATING FROM RATINGS " +
+                                                        "WHERE USER_RATING = "+rank+" " +
+                                                        "AND NOT USER_ID = "+targetId+" " +
+                                                        "AND TARGET_ID = "+targetId))
             {
                 set.last();
                 returns = new Short[set.getRow()];

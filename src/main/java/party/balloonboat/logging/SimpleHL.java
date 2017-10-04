@@ -17,14 +17,15 @@ package party.balloonboat.logging;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.pattern.color.ForegroundCompositeConverterBase;
-
 import static ch.qos.logback.core.pattern.color.ANSIConstants.*;
 import static ch.qos.logback.classic.Level.*;
 
 /**
+ * A simple highlighter for console text using logback classic.
+ *
  * @author Kaidan Gustave
  */
-public class LevelHighlighter extends ForegroundCompositeConverterBase<ILoggingEvent>
+public class SimpleHL extends ForegroundCompositeConverterBase<ILoggingEvent>
 {
     @Override
     protected String getForegroundColorCode(ILoggingEvent event)
