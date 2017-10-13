@@ -93,15 +93,23 @@ public class Database
             int i = 1;
             for(Long userId : calcTable.getTop20())
             {
-                b.appendDescription("`"+i+"` - ");
+                b.appendDescription("`"+(i < 10 ? "0": "")+i+"` - ");
+
+                short rating = getUserRating(userId);
+                for(short balloon = 1; balloon <= 5; balloon++)
+                {
+                    if(balloon < rating)
+                        b.appendDescription("\uD83C\uDF88");
+                    else
+                        b.appendDescription("\u25AA");
+                }
+                b.appendDescription(" - ");
+
                 Member member = message.getGuild().getMemberById(userId);
                 if(member != null)
                     b.appendDescription(member.getAsMention());
                 else
                     b.appendDescription("<@"+userId+">");
-
-                for(short balloons = 1; balloons <= getUserRating(userId); balloons++)
-                    b.appendDescription(" ").appendDescription(Bot.Config.BOT_EMOJI);
 
                 b.appendDescription("\n");
 
@@ -213,7 +221,7 @@ public class Database
                     target.getName(), target.getDiscriminator(), target.getIdLong(),
                     rating));
 
-            for(short balloons = 1; balloons <= getUserRating(user); balloons++)
+            for(short balloons = 1; balloons <= rating; balloons++)
             {
                 msg.append(" " + Bot.Config.BOT_EMOJI);
             }
@@ -289,7 +297,6 @@ public class Database
             LOG.warn("Encountered an SQLException: ",e);
         }
     }
-
 
     // IMPORTANT!!
     // This has THREE return cases:

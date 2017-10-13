@@ -30,12 +30,12 @@ plugins {
 }
 
 group 'party.balloonboat'
-version '0.3'
+version '0.4'
 
 mainClassName = "${group}.Bot"
 
 def jda = '6d5f0cc'
-def jda_utils = 'development-SNAPSHOT'
+def jda_utils = '1.8'
 
 sourceCompatibility = 1.8
 

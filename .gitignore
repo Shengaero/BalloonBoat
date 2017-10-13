@@ -15,11 +15,14 @@
 
 # Project Files
 src/test/
+/SQL/
+/backup/
 *.json
 *.txt
 *.db
 *.jar
 *.sh
+*.sql
 
 # Secrets
 src/main/java/party/balloonboat/utils/AlgorithmUtils.java

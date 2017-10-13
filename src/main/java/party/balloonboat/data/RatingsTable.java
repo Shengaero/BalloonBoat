@@ -17,30 +17,14 @@ package party.balloonboat.data;
 
 import party.balloonboat.utils.AlgorithmUtils;
 
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static party.balloonboat.data.Database.*;
+import java.sql.*;
+import java.util.*;
 
 /**
  * @author Kaidan Gustave
  */
 public class RatingsTable extends TableHandler
 {
-    /*
-     * RATINGS
-     * col USER_RATING SMALLINT
-     * col USER_ID LONG
-     * col TARGET_ID LONG
-     * col RATING SMALLINT
-     */
-
     private final CalculationsTable calcTable;
 
     public RatingsTable(Connection connection, CalculationsTable calcTable)
@@ -97,82 +81,126 @@ public class RatingsTable extends TableHandler
         return map;
     }
 
-    public void setRating(short userRating, long userId, long targetId, short rating) throws SQLException
+    public void setRating(long userId, long targetId, short rating) throws SQLException
     {
-        // Check if we're updating a row or inserting a new one
+        setRating(userId, targetId, rating, true);
+    }
+
+    private void setRating(long userId, long targetId, short rating, boolean recurse) throws SQLException
+    {
+        int oldPosition = getPosition(targetId);
+
+        short userRating = calcTable.getUserRating(userId, true);
+
         if(hasRated(userId, targetId))
         {
-            try(Statement statement = connection.createStatement())
+            try(PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE RATINGS " +
+                    "SET USER_RATING = ?, " +
+                        "RATING = ? " +
+                    "WHERE USER_ID = ? " +
+                    "AND TARGET_ID = ?"))
             {
-                // Update USER_RATING and RATING simultaneously.
-                statement.execute("UPDATE RATINGS " +
-                                  "SET USER_RATING = "+userRating+"," +
-                                      "RATING = "+rating+" " +
-                                  "WHERE USER_ID = "+userId+" " +
-                                  "AND TARGET_ID = "+targetId);
+                statement.setShort(1, userRating);
+                statement.setShort(2, rating);
+                statement.setLong(3, userId);
+                statement.setLong(4, targetId);
+                statement.execute();
             }
         }
         else
         {
-            try (Statement statement = connection.createStatement())
+            try(PreparedStatement statement = connection.prepareStatement(
+                    "INSERT INTO RATINGS (USER_RATING, USER_ID, TARGET_ID, RATING) VALUES (?, ?, ?, ?)"
+            ))
             {
-                // Insertion statement
-                statement.execute("INSERT INTO RATINGS(USER_RATING, USER_ID, TARGET_ID, RATING) " +
-                                  "VALUES ("+userRating+","+userId+","+targetId+","+rating+")");
+                statement.setShort(1, userRating);
+                statement.setLong(2, userId);
+                statement.setLong(3, targetId);
+                statement.setShort(4, rating);
+                statement.execute();
             }
         }
 
-        checkAndReevaluated(targetId);
-    }
+        calcTable.setAndReturnUserRating(targetId, calculateRating(targetId));
 
-    // May recurse back up to the method above!!
-    private void checkAndReevaluated(long userId) throws SQLException
-    {
-        List<Short[]> list = new ArrayList<>(5);
+        int newPosition = getPosition(targetId);
 
-        // For ranks 5 - 1
-        for(short i = 5; i >= 1; i--)
-            list.add(getAllTargetRatingsForRank(i, userId));
-
-        short before = calcTable.getUserRating(userId, true);
-        double trueRating = AlgorithmUtils.calculateRating(list);
-        short after = calcTable.setAndReturnUserRating(userId, trueRating);
-
-        LOG.debug("Calculated rating for user ID "+trueRating);
-
-        // We reevaluate the ratings of the target if and only if their effective rating
-        // has changed by now.
-        // While this could recurse several times potentially, it will most certainly not
-        // go forever (please don't let me be wrong...)
-        if(after != before)
+        if(recurse && oldPosition == newPosition)
         {
-            LOG.debug("Reevaluating rating for user ID "+userId+" ("+before+" -> "+after+")");
-            for(long targetId : getAllTargetsRated(userId))
+            for(Long recTargetId : getAllTargetsRated(targetId))
+                setRating(targetId, recTargetId, getRating(targetId, recTargetId), false);
+
+            try(PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE RATINGS SET USER_RATING = (" +
+                        "SELECT EFFECTIVE_RATING FROM CALCULATIONS " +
+                        "WHERE CALCULATIONS.USER_ID = RATINGS.USER_ID" +
+                    ")"
+            ))
             {
-                // RECURSION //
-                setRating(after, userId, targetId, getRating(userId, targetId));
+                statement.execute();
             }
         }
     }
 
-    public void setRating(long userId, long targetId, short rating) throws SQLException
+    private Set<Short> getOrderedRatings(long targetId) throws SQLException
     {
-        setRating(calcTable.getUserRating(userId, true), userId, targetId, rating);
+        Set<Short> ratingSet = new HashSet<>();
+        try(PreparedStatement statement = connection.prepareStatement(
+                "SELECT * FROM RATINGS " +
+                "WHERE TARGET_ID = ? " +
+                "GROUP BY(USER_ID) " +
+                "ORDER BY(SELECT CALCULATIONS.TRUE_RATING " +
+                         "FROM CALCULATIONS " +
+                         "WHERE CALCULATIONS.USER_ID = RATINGS.USER_ID) DESC"
+        ))
+        {
+            statement.setLong(1, targetId);
+            try(ResultSet set = statement.executeQuery())
+            {
+                while(set.next())
+                    ratingSet.add(set.getShort("RATING"));
+            }
+        }
+        return ratingSet;
+    }
+
+    double calculateRating(long userId) throws SQLException
+    {
+        return AlgorithmUtils.calculateRating(getOrderedRatings(userId));
+    }
+
+    public int getPosition(long userId) throws SQLException
+    {
+        int row = 0;
+        try(PreparedStatement statement = connection.prepareStatement(
+                "SELECT USER_ID FROM CALCULATIONS ORDER BY TRUE_RATING ASC"
+        ))
+        {
+            try(ResultSet set = statement.executeQuery())
+            {
+                while(set.next())
+                {
+                    row += 1;
+                    if(set.getLong("USER_ID") == userId)
+                        break;
+                }
+            }
+        }
+        return row;
     }
 
     // Gets all user ids rating another user id
     public Map<Long, Short> getAllUsersRating(long userId) throws SQLException
     {
         Map<Long, Short> map = new HashMap<>();
-        try(Statement statement = connection.createStatement())
+        try (Statement statement = connection.createStatement())
         {
-            try(ResultSet results = statement.executeQuery("SELECT * FROM RATINGS " +
+            try (ResultSet results = statement.executeQuery("SELECT * FROM RATINGS " +
                                                             "WHERE TARGET_ID = "+userId))
             {
                 while(results.next())
-                {
                     map.put(results.getLong("USER_ID"), results.getShort("RATING"));
-                }
             }
         }
         return map;
@@ -181,11 +209,11 @@ public class RatingsTable extends TableHandler
     public Long[] getAllTargetsRated(long userId) throws SQLException
     {
         final Long[] returns;
-        try(Statement statement = connection.createStatement(
+        try (Statement statement = connection.createStatement(
                 ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY))
         {
-            try(ResultSet set = statement.executeQuery("SELECT TARGET_ID FROM RATINGS " +
-                                                       "WHERE USER_ID = "+userId))
+            try (ResultSet set = statement.executeQuery("SELECT TARGET_ID FROM RATINGS " +
+                                                        "WHERE USER_ID = "+userId))
             {
                 if(set.last())
                     returns = new Long[set.getRow()];
@@ -196,30 +224,6 @@ public class RatingsTable extends TableHandler
                 {
                     set.next();
                     returns[i] = set.getLong("TARGET_ID");
-                }
-            }
-        }
-        return returns;
-    }
-
-    public Short[] getAllTargetRatingsForRank(short rank, long targetId) throws SQLException
-    {
-        final Short[] returns;
-        try (Statement statement = connection.createStatement(
-                ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY))
-        {
-            try (ResultSet set = statement.executeQuery("SELECT RATING FROM RATINGS " +
-                                                        "WHERE USER_RATING = "+rank+" " +
-                                                        "AND NOT USER_ID = "+targetId+" " +
-                                                        "AND TARGET_ID = "+targetId))
-            {
-                set.last();
-                returns = new Short[set.getRow()];
-                set.beforeFirst();
-                for(int i = 0; i<returns.length; i++)
-                {
-                    set.next();
-                    returns[i] = set.getShort("RATING");
                 }
             }
         }
